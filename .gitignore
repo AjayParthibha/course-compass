@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.db
+*.db-journal
+.env
+node_modules/
+web/dist/
+web/openapi.json
+*.log
+*.local
+.DS_Store
+eval/results/
+data/raw/
