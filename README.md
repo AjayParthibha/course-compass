@@ -8,4 +8,4 @@ Course planner for Cornell CS students. CS 4701 project.
 docker compose up
 ```
 
-API runs at http://localhost:8000.
+Frontend at http://localhost:5173, API at http://localhost:8000.
