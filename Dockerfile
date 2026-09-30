@@ -9,4 +9,4 @@ WORKDIR /app/backend
 
 # local development: code is mounted in by docker-compose.yml
 FROM base AS dev
-CMD ["sh", "-c", "uv sync --all-packages && uv run uvicorn app.main:app --host 0.0.0.0 --reload"]
+CMD ["sh", "-c", "uv sync --all-packages && uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --reload"]

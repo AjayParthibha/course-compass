@@ -1,0 +1,45 @@
+# DRAFT, not verified. College-level Engineering rules shared by every
+# Engineering major. Liberal studies codes in particular need checking.
+id: engineering
+label: College of Engineering
+catalog_year: 2024-25
+source_url: https://www.engineering.cornell.edu/students/undergraduate-students/curriculum/undergraduate-requirements
+verified: false
+requirements:
+  - id: eng-physics
+    label: Physics
+    kind: courses
+    courses: [PHYS 1112, PHYS 2213]
+
+  - id: eng-chem
+    label: Chemistry
+    kind: courses
+    courses: [CHEM 2090]
+
+  - id: eng-distribution
+    label: Engineering distribution
+    kind: filter
+    filter: {subjects: [ENGRD], min_level: 2000}
+    count: 2
+    double_count: [probability]
+
+  - id: eng-intro
+    label: Intro to engineering (ENGRI)
+    kind: filter
+    filter: {subjects: [ENGRI]}
+    count: 1
+
+  - id: fws
+    label: First-year writing seminars
+    kind: flag_only
+    count: 2
+    notes: FWS courses don't share a roster attribute yet; confirm by hand.
+
+  - id: ls
+    label: Liberal studies
+    kind: filter
+    filter:
+      attributes_any: [ALC-AS, ETM-AS, GLC-AS, HST-AS, SCD-AS, SSC-AS, CA-AG, HA-AG, KCM-AG, LA-AG, SBA-AG, FL-AG]
+      min_credits: 3
+    count: 6
+    credits: 18

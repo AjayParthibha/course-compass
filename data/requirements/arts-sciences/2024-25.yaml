@@ -1,0 +1,11 @@
+# Placeholder for A&S college rules (Track C).
+id: arts-sciences
+label: College of Arts & Sciences
+catalog_year: 2024-25
+source_url: https://as.cornell.edu/degree-requirements
+verified: false
+requirements:
+  - id: as-fws
+    label: First-year writing seminars
+    kind: flag_only
+    count: 2

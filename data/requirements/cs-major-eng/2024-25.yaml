@@ -1,0 +1,77 @@
+# DRAFT, not verified. Structure follows the design mockup; check every count
+# and course list against the source page before relying on it.
+id: cs-major-eng
+label: CS major (Engineering)
+catalog_year: 2024-25
+source_url: https://www.cs.cornell.edu/undergrad/rulesandproceduresengineering
+verified: false
+requirements:
+  - id: intro
+    label: Intro computing
+    kind: all_of
+    children:
+      - id: intro-1110
+        label: CS 1110 or 1112
+        kind: courses
+        courses: [CS 1110, CS 1112]
+        count: 1
+      - id: intro-2110
+        label: CS 2110 or 2112
+        kind: courses
+        courses: [CS 2110, CS 2112]
+        count: 1
+
+  - id: math
+    label: Math
+    kind: courses
+    courses: [MATH 1910, MATH 1920, MATH 2940]
+
+  - id: core
+    label: CS core
+    kind: all_of
+    children:
+      - {id: core-2800, label: CS 2800, kind: courses, courses: [CS 2800, CS 2802], count: 1}
+      - {id: core-3110, label: CS 3110, kind: courses, courses: [CS 3110], count: 1}
+      - {id: core-3410, label: CS 3410 or 3420, kind: courses, courses: [CS 3410, CS 3420], count: 1}
+      - {id: core-4410, label: CS 4410 or 4414, kind: courses, courses: [CS 4410, CS 4414], count: 1}
+      - {id: core-4820, label: CS 4820, kind: courses, courses: [CS 4820], count: 1}
+      - {id: core-3780, label: CS 3780, kind: courses, courses: [CS 3780], count: 1}
+
+  - id: probability
+    label: Probability
+    kind: courses
+    courses: [BTRY 3080, CS 4850, ECE 3100, ENGRD 2700, MATH 4710]
+    count: 1
+    double_count: [eng-distribution]
+
+  - id: e4000
+    label: 4000+ CS electives
+    kind: filter
+    filter: {subjects: [CS], min_level: 4000, min_credits: 3}
+    count: 2
+    double_count: [practicum]
+
+  - id: practicum
+    label: Practicum
+    kind: courses
+    courses: [CS 4121, CS 4152, CS 4154, CS 4411, CS 4450, CS 4621, CS 4701, CS 4758, CS 5150, CS 5152, CS 5412, CS 5414, CS 5431, CS 5625, CS 5643]
+    count: 1
+    double_count: [e4000]
+
+  - id: tech
+    label: Technical electives
+    kind: filter
+    filter: {min_level: 3000, min_credits: 3}
+    count: 3
+
+  - id: ext
+    label: External specialization
+    kind: filter
+    filter: {min_level: 3000, exclude_subjects: [CS], min_credits: 3}
+    count: 3
+
+  - id: aae
+    label: Advisor-approved elective
+    kind: flag_only
+    count: 1
+    notes: Needs a faculty advisor's sign-off, so we show it but never mark it done.

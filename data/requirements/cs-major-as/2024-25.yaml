@@ -1,0 +1,14 @@
+# Placeholder for the A&S CS major (Track C). Copy cs-major-eng and adjust:
+# A&S math sequence differs (MATH 1110/1120/2210 or equivalents).
+id: cs-major-as
+label: CS major (Arts & Sciences)
+catalog_year: 2024-25
+source_url: https://www.cs.cornell.edu/undergrad/rulesandproceduresarts
+verified: false
+requirements:
+  - id: intro
+    label: Intro computing
+    kind: all_of
+    children:
+      - {id: intro-1110, label: CS 1110 or 1112, kind: courses, courses: [CS 1110, CS 1112], count: 1}
+      - {id: intro-2110, label: CS 2110 or 2112, kind: courses, courses: [CS 2110, CS 2112], count: 1}
