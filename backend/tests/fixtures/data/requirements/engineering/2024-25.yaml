@@ -1,0 +1,11 @@
+id: engineering
+label: test college
+catalog_year: 2024-25
+source_url: https://example.com
+requirements:
+  - {id: math, label: Math, kind: courses, courses: [MATH 1910]}
+  - id: ls
+    label: Liberal studies
+    kind: filter
+    filter: {attributes_any: [SSC-AS, SBA-AG]}
+    count: 2

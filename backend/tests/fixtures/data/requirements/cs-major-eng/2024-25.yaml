@@ -1,0 +1,12 @@
+id: cs-major-eng
+label: test major
+catalog_year: 2024-25
+source_url: https://example.com
+requirements:
+  - {id: intro, label: Intro, kind: courses, courses: [CS 1110, CS 2110]}
+  - {id: core, label: Core, kind: courses, courses: [CS 2800, CS 3110, CS 4820]}
+  - id: e4000
+    label: 4000+ electives
+    kind: filter
+    filter: {subjects: [CS], min_level: 4000}
+    count: 1

@@ -1,0 +1,216 @@
+[
+ {
+  "code": "CS 1110",
+  "subject": "CS",
+  "number": "1110",
+  "title": "Intro to Computing",
+  "description": "Intro to Computing.",
+  "credits_min": 4,
+  "credits_max": 4,
+  "prereq_text": "",
+  "coreq_text": "",
+  "attributes": [],
+  "cross_listed": [],
+  "terms_offered": [
+   "FA25",
+   "SP26",
+   "FA26"
+  ],
+  "instructors": []
+ },
+ {
+  "code": "CS 2110",
+  "subject": "CS",
+  "number": "2110",
+  "title": "OOP and Data Structures",
+  "description": "OOP and Data Structures.",
+  "credits_min": 4,
+  "credits_max": 4,
+  "prereq_text": "CS 1110",
+  "coreq_text": "",
+  "attributes": [],
+  "cross_listed": [],
+  "terms_offered": [
+   "FA25",
+   "SP26",
+   "FA26"
+  ],
+  "instructors": []
+ },
+ {
+  "code": "CS 2800",
+  "subject": "CS",
+  "number": "2800",
+  "title": "Discrete Structures",
+  "description": "Discrete Structures.",
+  "credits_min": 4,
+  "credits_max": 4,
+  "prereq_text": "CS 1110",
+  "coreq_text": "",
+  "attributes": [],
+  "cross_listed": [],
+  "terms_offered": [
+   "FA25",
+   "SP26",
+   "FA26"
+  ],
+  "instructors": []
+ },
+ {
+  "code": "CS 3110",
+  "subject": "CS",
+  "number": "3110",
+  "title": "Functional Programming",
+  "description": "Functional Programming.",
+  "credits_min": 4,
+  "credits_max": 4,
+  "prereq_text": "CS 2110 and CS 2800",
+  "coreq_text": "",
+  "attributes": [],
+  "cross_listed": [],
+  "terms_offered": [
+   "FA25",
+   "SP26",
+   "FA26"
+  ],
+  "instructors": []
+ },
+ {
+  "code": "CS 4820",
+  "subject": "CS",
+  "number": "4820",
+  "title": "Algorithms",
+  "description": "Algorithms.",
+  "credits_min": 4,
+  "credits_max": 4,
+  "prereq_text": "CS 2800 and CS 3110",
+  "coreq_text": "",
+  "attributes": [],
+  "cross_listed": [],
+  "terms_offered": [
+   "FA25",
+   "SP26",
+   "FA26"
+  ],
+  "instructors": []
+ },
+ {
+  "code": "CS 4780",
+  "subject": "CS",
+  "number": "4780",
+  "title": "Machine Learning",
+  "description": "Machine Learning.",
+  "credits_min": 4,
+  "credits_max": 4,
+  "prereq_text": "CS 2110",
+  "coreq_text": "",
+  "attributes": [],
+  "cross_listed": [],
+  "terms_offered": [
+   "FA25",
+   "FA26"
+  ],
+  "instructors": []
+ },
+ {
+  "code": "CS 4740",
+  "subject": "CS",
+  "number": "4740",
+  "title": "NLP",
+  "description": "NLP.",
+  "credits_min": 4,
+  "credits_max": 4,
+  "prereq_text": "CS 2110",
+  "coreq_text": "",
+  "attributes": [],
+  "cross_listed": [],
+  "terms_offered": [
+   "FA25",
+   "SP26",
+   "FA26"
+  ],
+  "instructors": []
+ },
+ {
+  "code": "MATH 1910",
+  "subject": "MATH",
+  "number": "1910",
+  "title": "Calculus",
+  "description": "Calculus.",
+  "credits_min": 4,
+  "credits_max": 4,
+  "prereq_text": "",
+  "coreq_text": "",
+  "attributes": [],
+  "cross_listed": [],
+  "terms_offered": [
+   "FA25",
+   "SP26",
+   "FA26"
+  ],
+  "instructors": []
+ },
+ {
+  "code": "ECON 1110",
+  "subject": "ECON",
+  "number": "1110",
+  "title": "Microeconomics",
+  "description": "Microeconomics.",
+  "credits_min": 3,
+  "credits_max": 3,
+  "prereq_text": "",
+  "coreq_text": "",
+  "attributes": [
+   "SSC-AS"
+  ],
+  "cross_listed": [],
+  "terms_offered": [
+   "FA25",
+   "SP26",
+   "FA26"
+  ],
+  "instructors": []
+ },
+ {
+  "code": "PSYCH 1101",
+  "subject": "PSYCH",
+  "number": "1101",
+  "title": "Intro Psychology",
+  "description": "Intro Psychology.",
+  "credits_min": 3,
+  "credits_max": 3,
+  "prereq_text": "",
+  "coreq_text": "",
+  "attributes": [
+   "SBA-AG"
+  ],
+  "cross_listed": [],
+  "terms_offered": [
+   "FA25",
+   "SP26",
+   "FA26"
+  ],
+  "instructors": []
+ },
+ {
+  "code": "GOVT 1111",
+  "subject": "GOVT",
+  "number": "1111",
+  "title": "American Government",
+  "description": "American Government.",
+  "credits_min": 3,
+  "credits_max": 3,
+  "prereq_text": "",
+  "coreq_text": "",
+  "attributes": [
+   "SSC-AS"
+  ],
+  "cross_listed": [],
+  "terms_offered": [
+   "FA25",
+   "SP26",
+   "FA26"
+  ],
+  "instructors": []
+ }
+]
