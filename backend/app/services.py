@@ -1,0 +1,221 @@
+"""Plan, proposal and profile operations shared by the API routes and advisor tools."""
+
+from pydantic import TypeAdapter
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app import models
+from app.catalog.store import get_catalog
+from app.config import get_settings
+from app.planner.audit import audit
+from app.planner.ops import apply_ops, terms_between
+from app.planner.validate import prereq_edges, validate
+from app.requirements.loader import get_program
+from app.schemas import plans as s
+from app.schemas.profile import ProfileFact, Student
+
+parse_ops = TypeAdapter(list[s.PlanOp])
+
+
+class NotReady(Exception):
+    """Student hasn't finished onboarding, so there's no plan yet."""
+
+
+class Stale(Exception):
+    pass
+
+
+def student_schema(st: models.Student) -> Student:
+    return Student(
+        id=st.id,
+        code=st.code,
+        program=st.program,
+        catalog_year=st.catalog_year,
+        entering_term=st.entering_term,
+        graduation_term=st.graduation_term,
+        max_credits=st.max_credits,
+        memory_enabled=st.memory_enabled,
+        onboarded=bool(st.plans),
+    )
+
+
+def program_for(st: models.Student):
+    if not (st.program and st.catalog_year):
+        raise NotReady
+    return get_program(st.program, st.catalog_year)
+
+
+def slot_labels(st: models.Student) -> dict[str, str]:
+    return {r.id: r.label for r in program_for(st).all_requirements()}
+
+
+def get_plan(db: Session, st: models.Student) -> models.Plan:
+    if not st.plans:
+        raise NotReady
+    return st.plans[0]
+
+
+def current_placements(db: Session, plan: models.Plan) -> list[s.Placement]:
+    row = db.scalar(
+        select(models.PlanVersion).where(
+            models.PlanVersion.plan_id == plan.id, models.PlanVersion.version == plan.version
+        )
+    )
+    return [s.Placement.model_validate(p) for p in row.placements] if row else []
+
+
+def plan_schema(db: Session, st: models.Student, plan: models.Plan, placements=None) -> s.Plan:
+    placements = placements if placements is not None else current_placements(db, plan)
+    catalog = get_catalog()
+    for p in placements:
+        if p.course and (course := catalog.get(p.course)):
+            p.title = course.title
+    return s.Plan(
+        id=plan.id,
+        name=plan.name,
+        version=plan.version,
+        program=st.program,
+        terms=terms_between(st.entering_term, st.graduation_term),
+        current_term=get_settings().current_term,
+        placements=placements,
+    )
+
+
+def evaluate(st: models.Student, plan: s.Plan) -> s.PlanState:
+    catalog = get_catalog()
+    return s.PlanState(
+        plan=plan,
+        audit=audit(plan.placements, program_for(st), catalog),
+        violations=validate(plan.placements, plan.terms, catalog, st.max_credits),
+        edges=[s.PlanEdge(source=a, target=b) for a, b in prereq_edges(plan.placements, catalog)],
+    )
+
+
+def plan_state(db: Session, st: models.Student) -> s.PlanState:
+    plan = get_plan(db, st)
+    return evaluate(st, plan_schema(db, st, plan))
+
+
+def commit(db: Session, plan: models.Plan, placements: list[s.Placement], origin: str, note=None):
+    plan.version += 1
+    db.add(
+        models.PlanVersion(
+            plan_id=plan.id,
+            version=plan.version,
+            placements=[p.model_dump() for p in placements],
+            origin=origin,
+            note=note,
+        )
+    )
+    db.commit()
+
+
+def preview_ops(db: Session, st: models.Student, ops: list[s.PlanOp], origin="user") -> s.PlanState:
+    plan = get_plan(db, st)
+    current = plan_schema(db, st, plan)
+    new = apply_ops(current.placements, ops, get_catalog(), origin, slot_labels(st))
+    return evaluate(st, current.model_copy(update={"placements": new}))
+
+
+def apply_plan_ops(
+    db: Session, st: models.Student, ops: list[s.PlanOp], origin="user"
+) -> s.PlanState:
+    state = preview_ops(db, st, ops, origin)
+    commit(db, get_plan(db, st), state.plan.placements, origin)
+    return plan_state(db, st)
+
+
+def undo(db: Session, st: models.Student) -> s.PlanState:
+    plan = get_plan(db, st)
+    if plan.version <= 1:
+        return plan_state(db, st)
+    prev = db.scalar(
+        select(models.PlanVersion).where(
+            models.PlanVersion.plan_id == plan.id, models.PlanVersion.version == plan.version - 1
+        )
+    )
+    commit(db, plan, [s.Placement.model_validate(p) for p in prev.placements], "user", "undo")
+    return plan_state(db, st)
+
+
+def proposal_schema(row: models.Proposal) -> s.Proposal:
+    return s.Proposal(
+        id=row.id,
+        plan_id=row.plan_id,
+        base_version=row.base_version,
+        summary=row.summary,
+        ops=row.ops,
+        violations=row.violations,
+        status=row.status,
+        created_at=row.created_at,
+        **row.details,
+    )
+
+
+def create_proposal(
+    db: Session,
+    st: models.Student,
+    ops: list[s.PlanOp],
+    summary: str,
+    changes: list[s.ProposedChange] = (),
+    rejected: list[s.RejectedOption] = (),
+) -> s.Proposal:
+    plan = get_plan(db, st)
+    state = preview_ops(db, st, ops, origin="advisor")
+    blocking = [v for v in state.violations if v.blocking]
+    checks = []
+    if not any(v.kind == "prereq" for v in blocking):
+        checks.append("Every prerequisite still comes before the course that needs it")
+    if not any(v.kind == "credits_high" for v in blocking):
+        checks.append(f"No term goes above {st.max_credits} credits")
+    row = models.Proposal(
+        plan_id=plan.id,
+        base_version=plan.version,
+        summary=summary,
+        ops=[o.model_dump() for o in ops],
+        details={
+            "changes": [c.model_dump() for c in changes],
+            "rejected": [r.model_dump() for r in rejected],
+            "checks": checks,
+        },
+        violations=[v.model_dump() for v in state.violations],
+    )
+    db.add(row)
+    db.commit()
+    return proposal_schema(row)
+
+
+def get_proposal(db: Session, st: models.Student, proposal_id: int) -> models.Proposal | None:
+    row = db.get(models.Proposal, proposal_id)
+    if row is None or row.plan_id != get_plan(db, st).id:
+        return None
+    return row
+
+
+def apply_proposal(db: Session, st: models.Student, row: models.Proposal) -> s.PlanState:
+    plan = get_plan(db, st)
+    if row.status != "pending":
+        raise Stale(f"proposal is {row.status}")
+    if row.base_version != plan.version:
+        row.status = "stale"
+        db.commit()
+        raise Stale("the plan changed since this proposal was made")
+    state = apply_plan_ops(db, st, parse_ops.validate_python(row.ops), origin="advisor")
+    row.status = "applied"
+    db.commit()
+    return state
+
+
+def fact_schema(row: models.ProfileFact) -> ProfileFact:
+    return ProfileFact.model_validate(row, from_attributes=True)
+
+
+def visible_facts(db: Session, st: models.Student, conversation_id: int | None = None):
+    """Facts the advisor may use. With memory off, only this conversation's facts."""
+    q = select(models.ProfileFact).where(
+        models.ProfileFact.student_id == st.id,
+        models.ProfileFact.status.not_in(["superseded"]),
+    )
+    if not st.memory_enabled:
+        q = q.where(models.ProfileFact.conversation_id == conversation_id)
+    return list(db.scalars(q.order_by(models.ProfileFact.id)))
