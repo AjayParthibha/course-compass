@@ -12,6 +12,7 @@ def _env(tmp_path_factory):
     os.environ["DATA_DIR"] = str(FIXTURES)
     os.environ["DATABASE_URL"] = f"sqlite:///{db}"
     os.environ["CURRENT_TERM"] = "FA26"
+    os.environ["OPENAI_API_KEY"] = ""
     os.environ["STATIC_DIR"] = str(tmp_path_factory.mktemp("static") / "missing")
 
     from app import models  # noqa: F401

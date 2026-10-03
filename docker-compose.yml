@@ -3,6 +3,7 @@ services:
     build:
       context: .
       target: dev
+    env_file: .env
     volumes:
       - .:/app
     ports:

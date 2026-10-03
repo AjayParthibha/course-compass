@@ -1,0 +1,118 @@
+- id: eng-001-move-ok
+  split: dev
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  max_credits: 18
+  history:
+    FA24: [CS 1110, MATH 1910, CHEM 2090]
+    SP25: [CS 2110, MATH 1920, PHYS 1112]
+    FA25: [CS 2800, MATH 2940, PHYS 2213, ECON 1110]
+    SP26: [CS 3110, ENGRD 2700, PSYCH 1101]
+    FA26: [CS 3780, CS 4820, ORIE 3300]
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410, CS 4701]
+  request:
+    text: Push CS 4701 to my last spring.
+    ops:
+      - {op: move, course: CS 4701, term: SP28}
+  expected:
+    outcome: feasible
+
+- id: eng-002-drop-prereq
+  split: dev
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  max_credits: 18
+  history:
+    FA24: [CS 1110, MATH 1910, CHEM 2090]
+    SP25: [CS 2110, MATH 1920, PHYS 1112]
+    FA25: [CS 2800, MATH 2940, PHYS 2213, ECON 1110]
+    SP26: [CS 3110, ENGRD 2700, PSYCH 1101]
+    FA26: [CS 3780, CS 4820, ORIE 3300]
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410]
+  request:
+    text: I want to drop CS 3410.
+    ops:
+      - {op: remove, course: CS 3410}
+  expected:
+    outcome: infeasible
+    notes: CS 4410 needs CS 3410 or 3420, so a direct drop breaks the plan. Repair should swap in CS 3420 or move CS 4410.
+
+- id: eng-003-credit-cap
+  split: dev
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  max_credits: 15
+  history:
+    FA24: [CS 1110, MATH 1910, CHEM 2090]
+    SP25: [CS 2110, MATH 1920, PHYS 1112]
+    FA25: [CS 2800, MATH 2940, PHYS 2213, ECON 1110]
+    SP26: [CS 3110, ENGRD 2700, PSYCH 1101]
+    FA26: [CS 3780, CS 4820, ORIE 3300]
+  plan:
+    SP27: [CS 3410, CS 4740, CS 4320, ORIE 3500, GOVT 1111]
+  request:
+    text: Can spring be 15 credits max?
+    ops: []
+  expected:
+    outcome: infeasible
+    notes: Spring is planned at 18 credits; validate mode only checks the plan as given.
+
+- id: eng-004-add-elective
+  split: dev
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  max_credits: 18
+  history:
+    FA24: [CS 1110, MATH 1910, CHEM 2090]
+    SP25: [CS 2110, MATH 1920, PHYS 1112]
+    FA25: [CS 2800, MATH 2940, PHYS 2213, ECON 1110]
+    SP26: [CS 3110, ENGRD 2700, PSYCH 1101]
+    FA26: [CS 3780, CS 4820, ORIE 3300]
+  plan:
+    SP27: [CS 3410]
+  request:
+    text: Add CS 4780 next fall.
+    ops:
+      - {op: add, course: CS 4780, term: FA27}
+  expected:
+    outcome: feasible
+
+- id: eng-005-needs-info
+  split: dev
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  max_credits: 18
+  history:
+    FA24: [CS 1110, MATH 1910, CHEM 2090]
+    SP25: [CS 2110, MATH 1920, PHYS 1112]
+    FA25: [CS 2800, MATH 2940, PHYS 2213, ECON 1110]
+    SP26: [CS 3110, ENGRD 2700, PSYCH 1101]
+    FA26: [CS 3780, CS 4820, ORIE 3300]
+  plan:
+    SP27: [CS 3410]
+  hidden_preferences:
+    ls_goal: explore a new field
+  request:
+    text: What should I take for my liberal studies slot in spring?
+  expected:
+    outcome: needs_info
+    notes: 40+ courses fit; the advisor should ask what the student wants from the course.

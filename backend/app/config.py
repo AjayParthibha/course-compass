@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     snapshot: str | None = None  # defaults to the newest folder in data/snapshots
     current_term: str = "FA26"
 
+    openai_api_key: str | None = None
+    advisor_model: str = "gpt-5.6-terra"
+    advisor_effort: str = "medium"
+    max_tool_calls: int = 8
+
     static_dir: Path = REPO_ROOT / "web" / "dist"
     cors_origins: list[str] = ["http://localhost:5173"]
 

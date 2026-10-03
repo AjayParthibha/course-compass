@@ -62,6 +62,34 @@ def test_onboard_and_edit(client, auth):
     assert not any(p["course"] == "CS 3110" for p in undone["plan"]["placements"])
 
 
+def test_proposal_flow(client, auth):
+    from app import models
+    from app.advisor.tools import ToolContext, call_tool
+    from app.models import SessionLocal
+
+    onboard(client, auth)
+    token = auth["Authorization"].split()[1]
+    with SessionLocal() as db:
+        student = db.query(models.Student).filter_by(token=token).one()
+        ctx = ToolContext(db=db, student=student)
+        result = call_tool(
+            ctx,
+            "propose_changes",
+            {
+                "summary": "Add CS 3110 this fall",
+                "ops": [{"op": "add", "term": "FA26", "course": "CS 3110"}],
+                "changes": [{"course": "CS 3110", "to_term": "FA26", "reason": "next core course"}],
+            },
+        )
+    proposal_id = result.data["id"]
+    assert result.summary == "proposal ready"
+
+    applied = client.post(f"/api/proposals/{proposal_id}/apply", headers=auth).json()
+    assert any(p["course"] == "CS 3110" for p in applied["plan"]["placements"])
+    again = client.post(f"/api/proposals/{proposal_id}/apply", headers=auth)
+    assert again.status_code == 409
+
+
 def test_profile_facts(client, auth):
     fact = client.post(
         "/api/profile/facts",
@@ -71,3 +99,9 @@ def test_profile_facts(client, auth):
     assert fact["status"] == "stated"
     facts = client.get("/api/profile", headers=auth).json()["facts"]
     assert [f["text"] for f in facts] == ["Wants an ML job"]
+
+
+def test_chat_without_key_reports_error(client, auth):
+    with client.stream("POST", "/api/chat", json={"message": "hi"}, headers=auth) as res:
+        body = "".join(res.iter_text())
+    assert '"type":"error"' in body and '"type":"done"' in body
