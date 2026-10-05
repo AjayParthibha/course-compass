@@ -1,0 +1,122 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api, unwrap } from './client'
+import type { PlanOp, PlanState } from './types'
+
+export const keys = {
+  me: ['me'] as const,
+  plan: ['plan'] as const,
+  profile: ['profile'] as const,
+  course: (code: string) => ['course', code] as const,
+  proposal: (id: number) => ['proposal', id] as const,
+  proposalPreview: (id: number) => ['proposal', id, 'preview'] as const,
+  candidates: (slot: string, term: string, limit: number) => ['candidates', slot, term, limit] as const,
+  conversation: ['conversation', 'latest'] as const,
+}
+
+export function useMe(enabled = true) {
+  return useQuery({
+    queryKey: keys.me,
+    queryFn: () => unwrap(api.GET('/api/auth/me')),
+    enabled,
+    retry: false,
+  })
+}
+
+export function usePlan() {
+  return useQuery({ queryKey: keys.plan, queryFn: () => unwrap(api.GET('/api/plan')) })
+}
+
+export function useCourse(code: string | null | undefined) {
+  return useQuery({
+    queryKey: keys.course(code ?? ''),
+    queryFn: () => unwrap(api.GET('/api/courses/{code}', { params: { path: { code: code! } } })),
+    enabled: !!code,
+    staleTime: Infinity,
+  })
+}
+
+export function usePlanOps() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ops: PlanOp[]) => unwrap(api.POST('/api/plan/ops', { body: { ops } })),
+    onSuccess: (state) => qc.setQueryData(keys.plan, state),
+  })
+}
+
+export function useUndo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => unwrap(api.POST('/api/plan/undo')),
+    onSuccess: (state) => qc.setQueryData(keys.plan, state),
+  })
+}
+
+export function useProposal(id: number | null) {
+  return useQuery({
+    queryKey: keys.proposal(id ?? 0),
+    queryFn: () =>
+      unwrap(api.GET('/api/proposals/{proposal_id}', { params: { path: { proposal_id: id! } } })),
+    enabled: id != null,
+  })
+}
+
+export function useProposalPreview(id: number | null) {
+  return useQuery({
+    queryKey: keys.proposalPreview(id ?? 0),
+    queryFn: () =>
+      unwrap(
+        api.POST('/api/proposals/{proposal_id}/preview', {
+          params: { path: { proposal_id: id! } },
+        }),
+      ),
+    enabled: id != null,
+  })
+}
+
+export function useApplyProposal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrap(api.POST('/api/proposals/{proposal_id}/apply', { params: { path: { proposal_id: id } } })),
+    onSuccess: (state: PlanState, id) => {
+      qc.setQueryData(keys.plan, state)
+      qc.invalidateQueries({ queryKey: keys.proposal(id) })
+    },
+  })
+}
+
+export function useDiscardProposal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrap(
+        api.POST('/api/proposals/{proposal_id}/discard', { params: { path: { proposal_id: id } } }),
+      ),
+    onSuccess: (proposal) => qc.setQueryData(keys.proposal(proposal.id), proposal),
+  })
+}
+
+export function useProfile() {
+  return useQuery({ queryKey: keys.profile, queryFn: () => unwrap(api.GET('/api/profile')) })
+}
+
+export function useCandidates(slot: string, term: string, limit = 3) {
+  return useQuery({
+    queryKey: keys.candidates(slot, term, limit),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/slots/{slot_id}/candidates', {
+          params: { path: { slot_id: slot }, query: { term, limit } },
+        }),
+      ),
+    enabled: !!slot && !!term,
+  })
+}
+
+export function useLatestConversation() {
+  return useQuery({
+    queryKey: keys.conversation,
+    queryFn: () => unwrap(api.GET('/api/chat/latest')),
+    staleTime: Infinity,
+  })
+}

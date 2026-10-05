@@ -1,0 +1,102 @@
+import { useEffect, useRef } from 'react'
+import { Link } from 'react-router'
+import Message from './Message'
+import { useAdvisor } from './store'
+import { useChat } from './useChat'
+import { Button } from '../../ui'
+
+const SUGGESTIONS = ['Make spring lighter', 'Am I on track?', 'What should I take for liberal studies?']
+
+export default function AdvisorPanel() {
+  const { turns, streaming, draft, setDraft } = useAdvisor()
+  const { send } = useChat()
+  const scroller = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    scroller.current?.scrollTo({ top: scroller.current.scrollHeight })
+  }, [turns])
+
+  useEffect(() => {
+    if (draft) input.current?.focus()
+  }, [draft])
+
+  const submit = (e?: React.FormEvent) => {
+    e?.preventDefault()
+    send(draft)
+  }
+
+  return (
+    <aside
+      aria-label="Advisor"
+      className="sticky top-4 flex h-[calc(100vh-96px)] min-h-[520px] min-w-0 flex-[1_1_340px] flex-col overflow-hidden rounded-xl border border-line bg-paper lg:max-w-[400px]"
+    >
+      <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
+        <div>
+          <h2 className="m-0 text-[16px] font-extrabold">Advisor</h2>
+          <p className="m-0 text-[12.5px] text-muted">Checks every change with the planner before suggesting it</p>
+        </div>
+        <Link to="/profile" className="text-[13px] font-semibold whitespace-nowrap">
+          What it knows
+        </Link>
+      </div>
+
+      <div ref={scroller} className="flex flex-1 flex-col gap-5 overflow-y-auto px-4 py-4">
+        {turns.length === 0 && (
+          <p className="m-0 text-[13px] text-muted">
+            Ask about your plan, a requirement, or a course. The advisor proposes changes; nothing moves until you apply it.
+          </p>
+        )}
+        {turns.map((t, i) => (
+          <Message
+            key={t.id}
+            role={t.role}
+            events={t.events}
+            live={streaming && i === turns.length - 1}
+            canAnswer={!streaming && i === turns.length - 1}
+            onAnswer={send}
+          />
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-2 border-t border-line p-3">
+        <div className="flex flex-wrap gap-1.5">
+          {SUGGESTIONS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              disabled={streaming}
+              onClick={() => send(s)}
+              className="h-8 rounded-full border border-line bg-white px-3 text-[12.5px]"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+        <form onSubmit={submit} className="flex items-end gap-2">
+          <label htmlFor="advisor-input" className="sr-only">
+            Message the advisor
+          </label>
+          <textarea
+            id="advisor-input"
+            ref={input}
+            rows={2}
+            value={draft}
+            placeholder="Message the advisor"
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                submit()
+              }
+            }}
+            className="min-h-11 flex-1 resize-none rounded-md border border-[#C3C9BC] bg-white px-3 py-2"
+          />
+          <Button variant="primary" type="submit" disabled={streaming || !draft.trim()} className="h-11">
+            Send
+          </Button>
+        </form>
+      </div>
+    </aside>
+  )
+}
