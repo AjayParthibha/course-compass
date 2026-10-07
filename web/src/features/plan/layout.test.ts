@@ -10,8 +10,8 @@ const audit: AuditResult = {
   complete: false,
   unassigned: [],
   requirements: [
-    { id: 'core', label: 'Core', status: 'planned', needed: 2, filled: ['b'], children: [] },
-    { id: 'intro', label: 'Intro', status: 'done', needed: 1, filled: ['a'], children: [] },
+    { id: 'core', label: 'Core', status: 'planned', needed: 2, filled: ['b'], open_slots: 0, children: [] },
+    { id: 'intro', label: 'Intro', status: 'done', needed: 1, filled: ['a'], open_slots: 0, children: [] },
   ],
 }
 

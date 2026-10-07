@@ -32,6 +32,8 @@ def matches_filter(course: Course, f: CourseFilter) -> bool:
         return False
     if f.attributes_any and not set(f.attributes_any) & set(course.attributes):
         return False
+    if f.title_prefix and not course.title.startswith(f.title_prefix):
+        return False
     return True
 
 
@@ -72,12 +74,14 @@ def audit(placements: list[Placement], program: Program, catalog: Catalog) -> Au
 
     def status_of(req: Requirement) -> RequirementStatus:
         children = [status_of(c) for c in req.children]
+        open_slots = 0
         if req.kind == "flag_only":
             st, n, ids = "flagged", needed(req), []
         elif req.kind in ("all_of", "any_of"):
             ranks = [_rank(c.status) for c in children]
             best = max(ranks) if req.kind == "any_of" else min(ranks)
             st, n, ids = _unrank(best), len(children), []
+            open_slots = sum(1 for c in children if c.status != "missing" and c.open_slots)
         else:
             got = filled[req.id]
             n = needed(req)
@@ -89,8 +93,16 @@ def audit(placements: list[Placement], program: Program, catalog: Catalog) -> Au
             else:
                 st = "missing"
             ids = [p.id for p in got]
+            chosen = sum(1 for p in got if p.course)
+            open_slots = max(0, min(len(got), n) - min(chosen, n))
         return RequirementStatus(
-            id=req.id, label=req.label, status=st, needed=n, filled=ids, children=children
+            id=req.id,
+            label=req.label,
+            status=st,
+            needed=n,
+            filled=ids,
+            open_slots=open_slots,
+            children=children,
         )
 
     top = [status_of(r) for s in program.sets for r in s.requirements]
