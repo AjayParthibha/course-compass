@@ -105,3 +105,43 @@ def test_chat_without_key_reports_error(client, auth):
     with client.stream("POST", "/api/chat", json={"message": "hi"}, headers=auth) as res:
         body = "".join(res.iter_text())
     assert '"type":"error"' in body and '"type":"done"' in body
+
+
+def test_not_interested_hides_candidate(client, auth):
+    onboard(client, auth)
+    url = "/api/slots/ls/candidates"
+    params = {"term": "SP27", "limit": 10}
+
+    def codes(res):
+        return [c["course"]["code"] for c in res["candidates"]]
+
+    before = client.get(url, params=params, headers=auth).json()
+    assert "GOVT 1111" in codes(before) and before["hidden"] == []
+    assert before["ordering"]
+
+    fact = client.put("/api/courses/govt1111/not-interested", headers=auth).json()
+    assert fact["dimension"] == "not_interested" and fact["value"] == "GOVT 1111"
+    assert fact["status"] == "stated" and fact["text"].startswith("Not interested in GOVT 1111")
+    again = client.put("/api/courses/GOVT 1111/not-interested", headers=auth).json()
+    assert again["id"] == fact["id"]
+
+    after = client.get(url, params=params, headers=auth).json()
+    assert "GOVT 1111" not in codes(after)
+    assert after["eligible_count"] == before["eligible_count"] - 1
+    hidden = [(h["course"]["code"], h["fact_id"]) for h in after["hidden"]]
+    assert hidden == [("GOVT 1111", fact["id"])]
+    profile = client.get("/api/profile", headers=auth).json()
+    assert any(f["id"] == fact["id"] for f in profile["facts"])
+
+    undo = client.delete("/api/courses/GOVT 1111/not-interested", headers=auth)
+    assert undo.status_code == 204
+    restored = client.get(url, params=params, headers=auth).json()
+    assert "GOVT 1111" in codes(restored) and restored["hidden"] == []
+
+    # removing the fact from the profile page also brings the course back
+    client.put("/api/courses/GOVT 1111/not-interested", headers=auth)
+    fact_id = client.get(url, params=params, headers=auth).json()["hidden"][0]["fact_id"]
+    client.delete(f"/api/profile/facts/{fact_id}", headers=auth)
+    assert "GOVT 1111" in codes(client.get(url, params=params, headers=auth).json())
+
+    assert client.put("/api/courses/XYZ 9999/not-interested", headers=auth).status_code == 404
