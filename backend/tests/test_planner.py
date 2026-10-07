@@ -1,4 +1,5 @@
 from app.catalog.prereq_parse import parse
+from app.catalog.store import Catalog
 from app.planner.audit import audit
 from app.planner.ops import apply_ops
 from app.planner.validate import validate
@@ -29,6 +30,52 @@ def test_parse_permission_is_a_flag():
     assert parse("Permission of instructor.") == Flag(text="Permission of instructor")
 
 
+def codes(*cs):
+    return [CourseReq(code=c) for c in cs]
+
+
+def test_parse_example_list_is_one_of():
+    # CS 4780's real text: each "(e.g. ...)" names options for one requirement
+    expr = parse(
+        "Prerequisite: CS 2800, probability theory (e.g. BTRY 3080, ECON 3130, MATH 4710, "
+        "ENGRD 2700) and linear algebra (e.g. MATH 2940), calculus (e.g. MATH 1920) and "
+        "programming proficiency (e.g. CS 2110)."
+    )
+    probability = AnyOf(items=codes("BTRY 3080", "ECON 3130", "MATH 4710", "ENGRD 2700"))
+    assert expr == AllOf(
+        items=[CourseReq(code="CS 2800"), probability, *codes("MATH 2940", "MATH 1920", "CS 2110")]
+    )
+
+
+def test_parse_oxford_comma_list_is_one_of():
+    expr = parse("CS 4670, CS 4700, CS 4740, or CS 4780.")
+    assert expr == AnyOf(items=codes("CS 4670", "CS 4700", "CS 4740", "CS 4780"))
+
+
+def test_parse_plain_commas_still_mean_and():
+    expr = parse("CS 2800, MATH 1910, MATH 2210 or MATH 2940.")
+    assert expr == AllOf(
+        items=[*codes("CS 2800", "MATH 1910"), AnyOf(items=codes("MATH 2210", "MATH 2940"))]
+    )
+
+
+def test_parse_semicolon_parts_are_and_until_or():
+    expr = parse("CS 2110; CS 3410; or permission of instructor.")
+    assert expr == AnyOf(
+        items=[AllOf(items=codes("CS 2110", "CS 3410")), Flag(text="permission of instructor")]
+    )
+
+
+def test_parse_slash_and_bare_numbers():
+    assert parse("CS 4320/5320.") == AnyOf(items=codes("CS 4320", "CS 5320"))
+    assert parse("PHYS 2218 and 2210.") == AllOf(items=codes("PHYS 2218", "PHYS 2210"))
+
+
+def test_parse_ignores_recommended():
+    assert parse("CS 2110. Recommended prerequisite: CS 3110.") == CourseReq(code="CS 2110")
+    assert parse("Recommended prerequisite: CS 3110.") is None
+
+
 def test_prereq_order(catalog):
     plan = [
         place("CS 1110", "FA24", status="completed"),
@@ -40,6 +87,27 @@ def test_prereq_order(catalog):
     bad = plan + [place("CS 3110", "SP25"), place("CS 2800", "FA25")]
     errors = [v for v in validate(bad, TERMS, catalog) if v.kind == "prereq"]
     assert len(errors) == 1 and "CS 2800" in errors[0].message
+
+
+def test_prereq_equivalents(catalog):
+    # CS 2800 asks for "MATH 1110 or equivalent"; Engineering students take MATH 1910
+    cs2800 = catalog.get("CS 2800").model_copy(
+        update={"prereqs": AllOf(items=[CourseReq(code="MATH 1110"), CourseReq(code="CS 1110")])}
+    )
+    courses = [c for c in catalog.courses.values() if c.code != "CS 2800"] + [cs2800]
+    plan = [
+        place("MATH 1910", "FA24", status="completed"),
+        place("CS 1110", "FA24", status="completed"),
+        place("CS 2800", "SP25"),
+    ]
+    strict = Catalog(courses)
+    assert [v for v in validate(plan, TERMS, strict) if v.kind == "prereq"]
+
+    lenient = Catalog(courses, {"MATH 1910": ["MATH 1110"]})
+    assert not [v for v in validate(plan, TERMS, lenient) if v.kind == "prereq"]
+    # one-directional, and degree requirements / duplicate checks don't see it
+    assert "MATH 1910" not in lenient.prereq_credit("MATH 1110")
+    assert lenient.equivalents("MATH 1910") == {"MATH 1910"}
 
 
 def test_credit_cap(catalog):

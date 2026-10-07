@@ -18,8 +18,12 @@ def season(term: str) -> str:
 
 
 class Catalog:
-    def __init__(self, courses: list[Course]):
+    def __init__(
+        self, courses: list[Course], prereq_equivalents: dict[str, list[str]] | None = None
+    ):
         self.courses = {c.code: c for c in courses}
+        # course -> other courses whose prerequisites it also satisfies ("or equivalent")
+        self.prereq_equivalents = prereq_equivalents or {}
 
     def get(self, code: str) -> Course | None:
         return self.courses.get(normalize_code(code))
@@ -30,6 +34,15 @@ class Catalog:
     def equivalents(self, code: str) -> set[str]:
         course = self.get(code)
         return {code, *course.cross_listed} if course else {code}
+
+    def prereq_credit(self, code: str) -> set[str]:
+        """Every course code whose prerequisite this course satisfies: itself, its
+        cross-listings and any listed equivalents. Only for prerequisite checks;
+        degree requirements and duplicate detection use `equivalents`."""
+        out = self.equivalents(code)
+        for c in list(out):
+            out |= set(self.prereq_equivalents.get(c, []))
+        return out
 
     def offered_in(self, code: str, term: str) -> bool | None:
         """True/False from history, None if we have no data for the course."""
@@ -60,7 +73,12 @@ class Catalog:
         return [c for _, _, c in scored[:limit]]
 
     @classmethod
-    def load(cls, snapshot_dir: Path, prereq_dir: Path | None = None) -> "Catalog":
+    def load(
+        cls,
+        snapshot_dir: Path,
+        prereq_dir: Path | None = None,
+        equivalents_file: Path | None = None,
+    ) -> "Catalog":
         gz = snapshot_dir / "courses.json.gz"
         if gz.exists():
             with gzip.open(gz, "rt") as f:
@@ -78,7 +96,10 @@ class Catalog:
             else:
                 course.prereqs = parse(course.prereq_text, course.coreq_text)
             courses.append(course)
-        return cls(courses)
+        equivalents = {}
+        if equivalents_file and equivalents_file.exists():
+            equivalents = yaml.safe_load(equivalents_file.read_text()) or {}
+        return cls(courses, equivalents)
 
 
 def normalize_code(code: str) -> str:
@@ -110,4 +131,8 @@ def latest_snapshot(data_dir: Path) -> Path:
 def get_catalog() -> Catalog:
     settings = get_settings()
     snap = settings.data_dir / "snapshots" / settings.snapshot if settings.snapshot else None
-    return Catalog.load(snap or latest_snapshot(settings.data_dir), settings.data_dir / "prereqs")
+    return Catalog.load(
+        snap or latest_snapshot(settings.data_dir),
+        settings.data_dir / "prereqs",
+        settings.data_dir / "prereq_equivalents.yaml",
+    )
