@@ -90,6 +90,58 @@ def test_proposal_flow(client, auth):
     assert again.status_code == 409
 
 
+def propose(auth, summary, ops):
+    from app import models
+    from app.advisor.tools import ToolContext, call_tool
+    from app.models import SessionLocal
+
+    token = auth["Authorization"].split()[1]
+    with SessionLocal() as db:
+        student = db.query(models.Student).filter_by(token=token).one()
+        ctx = ToolContext(db=db, student=student)
+        result = call_tool(ctx, "propose_changes", {"summary": summary, "ops": ops, "changes": []})
+        convo = models.Conversation(student_id=student.id)
+        db.add(convo)
+        db.flush()
+        event = {"type": "proposal", "proposal": result.data}
+        db.add(
+            models.Message(conversation_id=convo.id, role="assistant", content=[], events=[event])
+        )
+        db.commit()
+    return result.data["id"]
+
+
+def test_proposal_outdated_after_plan_changes(client, auth):
+    onboard(client, auth)
+    proposal_id = propose(auth, "Add CS 3110", [{"op": "add", "term": "FA26", "course": "CS 3110"}])
+    assert client.get(f"/api/proposals/{proposal_id}", headers=auth).json()["status"] == "pending"
+
+    edit = {"ops": [{"op": "add", "term": "SP27", "course": "CS 3110"}]}
+    assert client.post("/api/plan/ops", json=edit, headers=auth).status_code == 200
+
+    proposal = client.get(f"/api/proposals/{proposal_id}", headers=auth).json()
+    assert proposal["status"] == "outdated"
+    history = client.get("/api/chat/latest", headers=auth).json()
+    assert history["messages"][-1]["events"][0]["proposal"]["status"] == "outdated"
+
+    res = client.post(f"/api/proposals/{proposal_id}/apply", headers=auth)
+    assert res.status_code == 409
+    assert "earlier version of your plan" in res.json()["detail"]
+    plan = client.get("/api/plan", headers=auth).json()["plan"]
+    assert [p["term"] for p in plan["placements"] if p["course"] == "CS 3110"] == ["SP27"]
+
+
+def test_chat_history_shows_current_proposal_status(client, auth):
+    onboard(client, auth)
+    proposal_id = propose(auth, "Add CS 3110", [{"op": "add", "term": "FA26", "course": "CS 3110"}])
+    client.post(f"/api/proposals/{proposal_id}/discard", headers=auth)
+
+    history = client.get("/api/chat/latest", headers=auth).json()
+    assert history["messages"][-1]["events"][0]["proposal"]["status"] == "discarded"
+    res = client.post(f"/api/proposals/{proposal_id}/apply", headers=auth)
+    assert res.status_code == 409
+
+
 def test_profile_facts(client, auth):
     fact = client.post(
         "/api/profile/facts",

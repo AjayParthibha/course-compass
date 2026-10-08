@@ -1,7 +1,7 @@
-import { useSearchParams } from 'react-router'
 import type { AdvisorEvent } from '../../api/types'
 import { toBlocks } from './blocks'
-import { Button } from '../../ui'
+import MarkdownText from './MarkdownText'
+import ProposalCard from './ProposalCard'
 
 type Props = {
   role: 'user' | 'assistant'
@@ -9,11 +9,10 @@ type Props = {
   live: boolean
   canAnswer: boolean
   onAnswer: (text: string) => void
+  latestProposalId: number | null
 }
 
-export default function Message({ role, events, live, canAnswer, onAnswer }: Props) {
-  const [, setParams] = useSearchParams()
-
+export default function Message({ role, events, live, canAnswer, onAnswer, latestProposalId }: Props) {
   if (role === 'user') {
     const text = events.map((e) => (e.type === 'text' ? e.delta : '')).join('')
     return (
@@ -30,7 +29,7 @@ export default function Message({ role, events, live, canAnswer, onAnswer }: Pro
       <span className="text-[12px] font-semibold text-muted">Advisor</span>
       {blocks.length === 0 && live && <span className="text-[13px] text-muted">Thinking…</span>}
       {blocks.map((b, i) => {
-        if (b.kind === 'text') return <p key={i} className="m-0 leading-relaxed whitespace-pre-wrap">{b.text}</p>
+        if (b.kind === 'text') return <MarkdownText key={i} text={b.text} streaming={live && i === blocks.length - 1} />
         if (b.kind === 'tool')
           return (
             <div key={i} className="font-mono text-[11.5px] leading-snug text-muted">
@@ -63,28 +62,7 @@ export default function Message({ role, events, live, canAnswer, onAnswer }: Pro
               )}
             </div>
           )
-        if (e.type === 'proposal')
-          return (
-            <div key={i} className="flex flex-col gap-2 rounded-lg border-[1.5px] border-ink bg-white p-3">
-              <span className="text-[11px] font-bold tracking-[0.08em] uppercase">Proposed change</span>
-              <span className="text-[13.5px]">{e.proposal.summary}</span>
-              {e.proposal.rejected.length > 0 && (
-                <details className="text-[13px]">
-                  <summary className="cursor-pointer font-semibold">What I didn’t do, and why</summary>
-                  <ul className="mt-1 mb-0 flex flex-col gap-1 pl-4">
-                    {e.proposal.rejected.map((r) => (
-                      <li key={r.title}>
-                        <strong>{r.title}</strong> {r.reason}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-              <Button variant="primary" className="self-start" onClick={() => setParams({ proposal: String(e.proposal.id) })}>
-                Preview in the graph
-              </Button>
-            </div>
-          )
+        if (e.type === 'proposal') return <ProposalCard key={i} initial={e.proposal} latestId={latestProposalId} />
         if (e.type === 'profile_update')
           return (
             <span key={i} className="text-[12.5px] text-muted">
