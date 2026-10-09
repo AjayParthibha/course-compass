@@ -15,22 +15,37 @@ import DegreeGraph from './DegreeGraph'
 export default function ProposalView({ id, current }: { id: number; current: PlanState }) {
   const [, setParams] = useSearchParams()
   const [showAfter, setShowAfter] = useState(true)
-  const { data: proposal } = useProposal(id)
-  const { data: preview } = useProposalPreview(id)
+  const { data: proposal, error: proposalError } = useProposal(id)
+  const { data: preview, error: previewError } = useProposalPreview(id)
   const apply = useApplyProposal()
   const discard = useDiscardProposal()
   const undo = useUndo()
   const close = () => setParams({})
 
-  if (!proposal || !preview) return <div className="p-6 text-muted">Loading proposal…</div>
+  // an outdated or already-handled proposal can't be previewed; say so instead of loading forever
+  const failed = proposalError ?? (proposal?.status === 'applied' ? null : previewError)
+  if (failed) {
+    return (
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-white p-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="m-0 text-xl font-extrabold tracking-tight">This suggestion can’t be previewed</h1>
+          <p className="m-0 text-[14px] text-muted">{failed.message}</p>
+        </div>
+        <Button onClick={close}>Back to plan</Button>
+      </section>
+    )
+  }
+  const applied = proposal?.status === 'applied'
+  if (!proposal || (!preview && !applied)) return <div className="p-6 text-muted">Loading proposal…</div>
 
-  const applied = proposal.status === 'applied'
   const before = new Map(current.plan.placements.map((p) => [p.id, p]))
   const moved = new Set(
-    preview.plan.placements.filter((p) => before.get(p.id)?.term !== p.term).map((p) => p.id),
+    (preview?.plan.placements ?? [])
+      .filter((p) => before.get(p.id)?.term !== p.term)
+      .map((p) => p.id),
   )
   const ghosts = current.plan.placements.filter((p) => moved.has(p.id))
-  const shown = applied ? current : showAfter ? preview : current
+  const shown = applied || !preview ? current : showAfter ? preview : current
   const blocking = proposal.violations.filter((v) => v.blocking)
 
   return (

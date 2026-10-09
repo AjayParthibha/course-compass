@@ -1,12 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
 import { api, unwrap } from '../../api/client'
 import { keys } from '../../api/hooks'
 import type { ParsedCourse, ParseResult } from '../../api/types'
 import { Button, Logo, SectionLabel } from '../../ui'
 import { termLabel } from '../../ui/terms'
-import { useAdvisor } from '../advisor/store'
+import GoalsStep from './GoalsStep'
 
 const ENTERING = ['FA22', 'SP23', 'FA23', 'SP24', 'FA24', 'SP25', 'FA25', 'SP26']
 const GRADUATING = ['FA26', 'SP27', 'FA27', 'SP28', 'FA28', 'SP29', 'FA29', 'SP30']
@@ -32,12 +31,12 @@ function Steps({ step }: { step: number }) {
   const items = [
     ['Your coursework', 'Pasted from Student Center'],
     ['Check what we read', 'Nothing is planned until you confirm'],
-    ['What you’re aiming for', 'A short conversation, not a form'],
+    ['What you’re aiming for', 'Three optional questions'],
   ]
   return (
     <ol className="m-0 flex list-none flex-wrap gap-6 p-0">
       {items.map(([title, sub], i) => (
-        <li key={title} className={`flex items-center gap-3 ${i === step ? '' : 'opacity-60'}`}>
+        <li key={title} aria-current={i === step ? 'step' : undefined} className={`flex items-center gap-3 ${i === step ? '' : 'opacity-60'}`}>
           <span className={`grid h-7 w-7 place-items-center rounded-full font-mono text-[13px] font-semibold ${i <= step ? 'bg-ink text-paper' : 'border border-ink'}`}>
             {i + 1}
           </span>
@@ -115,9 +114,7 @@ function Row({
 }
 
 export default function OnboardingPage() {
-  const navigate = useNavigate()
   const qc = useQueryClient()
-  const setDraft = useAdvisor((s) => s.setDraft)
   const [step, setStep] = useState(0)
   const [program, setProgram] = useState('cs-eng')
   const [entering, setEntering] = useState('FA24')
@@ -196,22 +193,34 @@ export default function OnboardingPage() {
             <fieldset className="m-0 flex flex-wrap gap-3 border-0 p-0">
               <legend className="mb-2 font-semibold">Your program</legend>
               {PROGRAMS.map((p) => (
-                <label key={p.id} className={`flex h-10 items-center gap-2 rounded-md border px-3 ${program === p.id ? 'border-ink' : 'border-line'}`}>
-                  <input type="radio" name="program" checked={program === p.id} onChange={() => setProgram(p.id)} />
+                <label
+                  key={p.id}
+                  htmlFor={`program-${p.id}`}
+                  className={`flex h-10 items-center gap-2 rounded-md border px-3 ${program === p.id ? 'border-ink' : 'border-line'}`}
+                >
+                  <input
+                    id={`program-${p.id}`}
+                    type="radio"
+                    name="program"
+                    value={p.id}
+                    aria-label={p.label}
+                    checked={program === p.id}
+                    onChange={() => setProgram(p.id)}
+                  />
                   {p.label}
                 </label>
               ))}
             </fieldset>
             <div className="flex flex-wrap gap-6">
-              <label className="flex flex-col gap-1">
+              <label htmlFor="onboarding-entering" className="flex flex-col gap-1">
                 <span className="font-semibold">First semester at Cornell</span>
-                <select value={entering} onChange={(e) => setEntering(e.target.value)} className="h-10 rounded-md border border-[#C3C9BC] bg-white px-2">
+                <select id="onboarding-entering" value={entering} onChange={(e) => setEntering(e.target.value)} className="h-10 rounded-md border border-[#C3C9BC] bg-white px-2">
                   {ENTERING.map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
                 </select>
               </label>
-              <label className="flex flex-col gap-1">
+              <label htmlFor="onboarding-graduating" className="flex flex-col gap-1">
                 <span className="font-semibold">Expected graduation</span>
-                <select value={graduating} onChange={(e) => setGraduating(e.target.value)} className="h-10 rounded-md border border-[#C3C9BC] bg-white px-2">
+                <select id="onboarding-graduating" value={graduating} onChange={(e) => setGraduating(e.target.value)} className="h-10 rounded-md border border-[#C3C9BC] bg-white px-2">
                   {GRADUATING.map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
                 </select>
               </label>
@@ -269,25 +278,7 @@ export default function OnboardingPage() {
           </section>
         )}
 
-        {step === 2 && (
-          <section className="flex flex-col gap-4 rounded-xl border border-line bg-white p-5">
-            <h1 className="m-0 text-2xl font-extrabold tracking-tight">Your history is saved.</h1>
-            <p className="m-0 text-muted">
-              Last step: tell the advisor what you’re aiming for (a job, grad school, a field you’re curious about).
-              It uses this to rank courses, and you can change it any time from your profile.
-            </p>
-            <Button
-              variant="primary"
-              className="h-11 self-start"
-              onClick={() => {
-                setDraft('After graduating I’m hoping to ')
-                navigate('/plan')
-              }}
-            >
-              Talk to the advisor
-            </Button>
-          </section>
-        )}
+        {step === 2 && <GoalsStep />}
       </main>
     </div>
   )

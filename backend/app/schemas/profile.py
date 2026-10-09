@@ -1,5 +1,7 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
+
+from pydantic import Field
 
 from app.schemas.base import Schema
 
@@ -54,17 +56,34 @@ class Student(Schema):
     entering_term: str | None
     graduation_term: str | None
     max_credits: int
+    # per-term overrides of max_credits for remaining terms, e.g. {"SP27": 15}
+    term_caps: dict[str, int] = {}
     memory_enabled: bool
     onboarded: bool
 
 
 class StudentUpdate(Schema):
+    """Graduation term and credit limits change through PlanSettingsUpdate instead."""
+
     program: str | None = None
     catalog_year: str | None = None
     entering_term: str | None = None
-    graduation_term: str | None = None
-    max_credits: int | None = None
     memory_enabled: bool | None = None
+
+
+MIN_CREDIT_CAP = 12
+MAX_CREDIT_CAP = 23
+
+Term = Annotated[str, Field(pattern=r"^(FA|SP)\d{2}$")]
+CreditCap = Annotated[int, Field(ge=MIN_CREDIT_CAP, le=MAX_CREDIT_CAP)]
+
+
+class PlanSettingsUpdate(Schema):
+    """Fields left out stay as they are. `term_caps` replaces the whole map."""
+
+    graduation_term: Term | None = None
+    max_credits: CreditCap | None = None
+    term_caps: dict[Term, CreditCap] | None = None
 
 
 class Profile(Schema):

@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import { useCourse } from '../../api/hooks'
 import type { Placement, PlanState } from '../../api/types'
 import { Button, SectionLabel } from '../../ui'
+import { cureviewsUrl } from '../../ui/links'
 import { termLabel } from '../../ui/terms'
 import { useAdvisor } from '../advisor/store'
 import { usePlanEdits } from './edits'
@@ -10,7 +11,6 @@ import { usePlanUI } from './store'
 
 const statusText = { completed: 'Done', in_progress: 'Taking now', planned: 'Planned' }
 
-const cureviewsUrl = (code: string) => `https://www.cureviews.org/course/${code.trim().split(/\s+/).map(encodeURIComponent).join('/')}`
 
 function requirementFor(state: PlanState, id: string) {
   for (const r of state.audit.requirements) {
@@ -97,6 +97,27 @@ function PrereqNode({ check, onSelect, settled = false }: NodeProps) {
   )
 }
 
+function KeepToggle({ placement, onChange }: { placement: Placement; onChange: (locked: boolean) => void }) {
+  const hint = `keep-hint-${placement.id}`
+  return (
+    <div className="flex flex-col gap-0.5 text-[13px]">
+      <label className="flex items-center gap-2 font-semibold">
+        <input
+          type="checkbox"
+          checked={placement.locked}
+          onChange={(e) => onChange(e.target.checked)}
+          aria-describedby={hint}
+          className="h-4 w-4 accent-ink"
+        />
+        Keep in {termLabel(placement.term)}
+      </label>
+      <span id={hint} className="pl-6 text-muted">
+        {placement.locked ? 'The planner and advisor won’t move it.' : 'Lets the planner and advisor move it if needed.'}
+      </span>
+    </div>
+  )
+}
+
 function MoveSelect({ placement, state, onMove }: { placement: Placement; state: PlanState; onMove: (term: string) => void }) {
   const { terms, current_term } = state.plan
   const later = terms.slice(terms.indexOf(current_term) + 1)
@@ -106,8 +127,10 @@ function MoveSelect({ placement, state, onMove }: { placement: Placement; state:
       <span className="font-semibold">Move to another term</span>
       <select
         value={placement.term}
+        disabled={placement.locked}
+        title={placement.locked ? `Untick “Keep in ${termLabel(placement.term)}” to move it` : undefined}
         onChange={(e) => onMove(e.target.value)}
-        className="h-9 rounded-md border border-[#C3C9BC] bg-white px-2"
+        className="h-9 rounded-md border border-[#C3C9BC] bg-white px-2 disabled:opacity-60"
       >
         {options.map((t) => (
           <option key={t} value={t}>{termLabel(t, true)}</option>
@@ -161,7 +184,12 @@ export default function Inspector({ state }: { state: PlanState }) {
         <Button onClick={() => setDraft(`What should I take for the ${placement.slot_label?.toLowerCase()} slot in ${termLabel(placement.term, true)}?`)}>
           Ask the advisor
         </Button>
-        {movable && <MoveSelect placement={placement} state={state} onMove={(t) => edits.move(placement, t)} />}
+        {movable && (
+          <>
+            <KeepToggle placement={placement} onChange={(locked) => edits.lock(placement, locked)} />
+            <MoveSelect placement={placement} state={state} onMove={(t) => edits.move(placement, t)} />
+          </>
+        )}
       </div>
     )
   }
@@ -229,7 +257,7 @@ export default function Inspector({ state }: { state: PlanState }) {
             href={cureviewsUrl(placement.course)}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label={`Read ${placement.course} reviews on CUReviews (opens in a new tab)`}
+            aria-label={`Read reviews on CUReviews for ${placement.course} (opens in a new tab)`}
             className="self-start font-semibold text-ink underline underline-offset-3"
           >
             Read reviews on CUReviews
@@ -239,6 +267,7 @@ export default function Inspector({ state }: { state: PlanState }) {
 
       {movable && (
         <div className="flex flex-col gap-2">
+          <KeepToggle placement={placement} onChange={(locked) => edits.lock(placement, locked)} />
           <MoveSelect placement={placement} state={state} onMove={(t) => edits.move(placement, t)} />
           <Button
             onClick={() => {

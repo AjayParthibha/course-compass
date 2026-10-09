@@ -98,7 +98,7 @@ function ReviewsLink({ code, href }: { code: string; href?: string }) {
       href={href || cureviewsUrl(code)}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`Read ${code} reviews on CUReviews (opens in a new tab)`}
+      aria-label={`Read reviews on CUReviews for ${code} (opens in a new tab)`}
       className="inline-flex min-h-11 items-center text-[13px] font-semibold sm:min-h-0"
     >
       Read reviews on CUReviews

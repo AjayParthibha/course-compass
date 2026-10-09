@@ -45,6 +45,7 @@ function nodeLabel(p: Placement, state: CourseData['state'], problem: boolean) {
   const parts = p.course
     ? [p.course, p.title, termLabel(p.term, true), stateLabel[state]]
     : ['Open slot', p.slot_label, termLabel(p.term, true), `${p.credits} credits`]
+  if (p.locked) parts.push(`kept in ${termLabel(p.term, true)}`)
   if (problem) parts.push('has a problem')
   return parts.filter(Boolean).join(', ')
 }
@@ -63,7 +64,7 @@ function CourseNode({ data }: NodeProps<Node<CourseData>>) {
     <div
       className={`box-border flex flex-col gap-0.5 overflow-hidden rounded-[7px] px-2 py-1.5 ${cls} ${dim ? 'border-line-soft! [&>*]:opacity-35' : ''}`}
       style={{ width: NODE_W, height: NODE_H }}
-      title={`${code}${title ? ` · ${title}` : ''}`}
+      title={`${code}${title ? ` · ${title}` : ''}${p.locked ? ` · kept in ${termLabel(p.term)}` : ''}`}
     >
       <Handle type="target" position={Position.Left} className="opacity-0!" isConnectable={false} />
       <div className="flex flex-nowrap items-baseline justify-between gap-1 leading-[17px]">
@@ -72,7 +73,15 @@ function CourseNode({ data }: NodeProps<Node<CourseData>>) {
         >
           {code}
         </span>
-        <span className="shrink-0 font-mono text-[10px] text-muted">{state === 'ghost' ? 'was' : `${p.credits} cr`}</span>
+        <span className="flex shrink-0 items-center gap-0.5 font-mono text-[10px] text-muted">
+          {p.locked && state !== 'ghost' && (
+            <svg width="9" height="10" viewBox="0 0 9 10" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
+              <rect x="1" y="4.5" width="7" height="5" rx="1" />
+              <path d="M2.75 4.5V3a1.75 1.75 0 0 1 3.5 0v1.5" />
+            </svg>
+          )}
+          {state === 'ghost' ? 'was' : `${p.credits} cr`}
+        </span>
       </div>
       <span className="line-clamp-2 text-[11px] leading-[14px] text-ink-soft">{title}</span>
       <Handle type="source" position={Position.Right} className="opacity-0!" isConnectable={false} />
@@ -163,7 +172,7 @@ export default function DegreeGraph({
         type: 'course',
         position: { x: pos.x, y: pos.y },
         data,
-        draggable: !readOnly && p.status === 'planned',
+        draggable: !readOnly && p.status === 'planned' && !p.locked,
         ariaLabel: nodeLabel(p, data.state, data.problem),
         ariaRole: onSelect ? 'button' : 'group',
         domAttributes: { 'aria-roledescription': undefined },
@@ -230,7 +239,16 @@ export default function DegreeGraph({
           edges={flowEdges}
           nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
-          onNodeClick={(_, node) => node.type === 'course' && !node.id.startsWith('ghost-') && onSelect?.(node.id)}
+          onNodeClick={(e, node) => {
+            if (node.type !== 'course' || node.id.startsWith('ghost-') || !onSelect) return
+            // clicking the selected card again clears the selection and lets go of focus
+            if (node.id === selected) {
+              onSelect(null)
+              ;(e.target as HTMLElement).closest<HTMLElement>('.react-flow__node')?.blur()
+            } else {
+              onSelect(node.id)
+            }
+          }}
           onPaneClick={() => onSelect?.(null)}
           onKeyDown={(e) => {
             const el = e.target as HTMLElement
@@ -238,7 +256,7 @@ export default function DegreeGraph({
             if (!onSelect || !id || !plan.placements.some((p) => p.id === id)) return
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault()
-              onSelect(id)
+              onSelect(id === selected ? null : id)
             } else if (e.key === 'Escape') {
               onSelect(null)
             }
