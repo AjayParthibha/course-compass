@@ -1,5 +1,6 @@
 from app.catalog.store import Catalog
 from app.planner.audit import matches
+from app.planner.ops import term_index
 from app.planner.validate import satisfied
 from app.schemas.courses import Course
 from app.schemas.plans import Placement
@@ -9,20 +10,20 @@ from app.schemas.requirements import Requirement
 def list_eligible(
     req: Requirement,
     term: str,
-    terms: list[str],
     placements: list[Placement],
     catalog: Catalog,
 ) -> list[Course]:
     """Courses that would fill `req` in `term`: match the rule, prereqs done by then,
     not already in the plan, and offered in that season at some point."""
-    idx = terms.index(term)
+    # by calendar position, so a placement outside the plan's terms can't break this
+    idx = term_index(term)
     before: set[str] = set()
     in_plan: set[str] = set()
     for p in placements:
         if not p.course:
             continue
         in_plan |= catalog.equivalents(p.course)
-        if p.status == "completed" or terms.index(p.term) < idx:
+        if p.status == "completed" or term_index(p.term) < idx:
             before |= catalog.prereq_credit(p.course)
 
     out = []

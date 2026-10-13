@@ -109,7 +109,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Undo */
+        /**
+         * Undo
+         * @description Step back one edit. Repeating it keeps going back through the plan's history.
+         *
+         *     Fails with 409 when the earlier plan used terms that are no longer in the plan.
+         */
         post: operations["undo_api_plan_undo_post"];
         delete?: never;
         options?: never;
@@ -361,11 +366,15 @@ export interface paths {
         /**
          * Mark Not Interested
          * @description Remember that the student doesn't want this course suggested. Saved as a stated
-         *     profile fact, so it shows on the profile page and can be removed there.
+         *     profile fact, so it shows on the profile page and can be removed there. Marking a
+         *     course whose cross-listing is already marked returns the existing fact.
          */
         put: operations["mark_not_interested_api_courses__code__not_interested_put"];
         post?: never;
-        /** Unmark Not Interested */
+        /**
+         * Unmark Not Interested
+         * @description Show the course again, whichever of its cross-listed codes it was hidden under.
+         */
         delete: operations["unmark_not_interested_api_courses__code__not_interested_delete"];
         options?: never;
         head?: never;
@@ -940,6 +949,11 @@ export interface components {
              * @enum {string}
              */
             origin: "import" | "user" | "advisor" | "planner";
+            /**
+             * Counts As
+             * @default []
+             */
+            counts_as: string[];
         };
         /** Plan */
         Plan: {
@@ -1299,15 +1313,10 @@ export interface components {
         };
         /**
          * StudentUpdate
-         * @description Graduation term and credit limits change through PlanSettingsUpdate instead.
+         * @description Program and entering term are set by onboarding; graduation term and credit
+         *     limits change through PlanSettingsUpdate. Unknown fields are rejected.
          */
         StudentUpdate: {
-            /** Program */
-            program?: string | null;
-            /** Catalog Year */
-            catalog_year?: string | null;
-            /** Entering Term */
-            entering_term?: string | null;
             /** Memory Enabled */
             memory_enabled?: boolean | null;
         };

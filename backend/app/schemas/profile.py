@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from app.schemas.base import Schema
 
@@ -63,11 +63,11 @@ class Student(Schema):
 
 
 class StudentUpdate(Schema):
-    """Graduation term and credit limits change through PlanSettingsUpdate instead."""
+    """Program and entering term are set by onboarding; graduation term and credit
+    limits change through PlanSettingsUpdate. Unknown fields are rejected."""
 
-    program: str | None = None
-    catalog_year: str | None = None
-    entering_term: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
     memory_enabled: bool | None = None
 
 

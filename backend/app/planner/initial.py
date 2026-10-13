@@ -1,5 +1,6 @@
 """Starter plan after onboarding: one open slot per unfilled requirement seat,
-spread across the remaining terms. Placeholder until the CP-SAT planner exists."""
+spread across the remaining terms (or in the earliest ones for requirements marked
+`seed: earliest`). Placeholder until the CP-SAT planner exists."""
 
 from app.catalog.store import Catalog
 from app.planner.audit import audit, needed
@@ -28,12 +29,17 @@ def seed_slots(
 
     load = {t: sum(p.credits for p in placements if p.term == t) for t in future}
     out = list(placements)
-    for req in program.all_requirements():
+    # place the early ones first so the spread ones balance around them
+    reqs = sorted(program.all_requirements(), key=lambda r: r.seed != "earliest")
+    for req in reqs:
         if req.kind not in ("courses", "filter"):
             continue
         missing = needed(req) - len(statuses[req.id].filled)
-        for _ in range(max(missing, 0)):
-            term = min(future, key=lambda t: load[t])
+        for i in range(max(missing, 0)):
+            if req.seed == "earliest":
+                term = future[min(i, len(future) - 1)]
+            else:
+                term = min(future, key=lambda t: load[t])
             load[term] += SLOT_CREDITS
             out.append(
                 Placement(

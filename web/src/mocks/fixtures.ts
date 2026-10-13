@@ -94,6 +94,7 @@ export const placements: Placement[] = ROWS.map(([code, title, credits, term, re
   status: statusFor(term) as Placement['status'],
   locked: false,
   origin: 'import',
+  counts_as: [],
 }))
 
 export const titles: Record<string, string> = Object.fromEntries(
