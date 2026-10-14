@@ -1,11 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, unwrap } from '../../api/client'
-import { keys } from '../../api/hooks'
+import { keys, useMe } from '../../api/hooks'
 import type { ParsedCourse, ParseResult } from '../../api/types'
 import { Button, Logo, SectionLabel } from '../../ui'
 import { termLabel } from '../../ui/terms'
+import { termIndex } from '../profile/settings'
 import GoalsStep from './GoalsStep'
+import { startingChoices } from './goals'
 
 const ENTERING = ['FA22', 'SP23', 'FA23', 'SP24', 'FA24', 'SP25', 'FA25', 'SP26']
 const GRADUATING = ['FA26', 'SP27', 'FA27', 'SP28', 'FA28', 'SP29', 'FA29', 'SP30']
@@ -18,6 +20,9 @@ FA24  CS 1110 / MATH 1910 / CHEM 2090 / FWS
 SP25  CS 211x, MATH 1920, PHYS 1112
 FA25  CS 2800 MATH 2940 PHYS 2213 ECON 1110
 SP26  CS 3110, CS 3410, ENGRD 2700 (4cr)`
+
+const withTerm = (terms: string[], term: string) =>
+  terms.includes(term) ? terms : [...terms, term].sort((a, b) => termIndex(a) - termIndex(b))
 
 const issueLabel: Record<string, string> = {
   ambiguous_code: 'Which one?',
@@ -115,10 +120,12 @@ function Row({
 
 export default function OnboardingPage() {
   const qc = useQueryClient()
+  const { data: me } = useMe()
+  const [start] = useState(() => startingChoices(me, PROGRAMS.map((p) => p.id)))
   const [step, setStep] = useState(0)
-  const [program, setProgram] = useState('cs-eng')
-  const [entering, setEntering] = useState('FA24')
-  const [graduating, setGraduating] = useState('SP28')
+  const [program, setProgram] = useState(start.program)
+  const [entering, setEntering] = useState(start.entering)
+  const [graduating, setGraduating] = useState(start.graduating)
   const [text, setText] = useState('')
   const [parsed, setParsed] = useState<ParseResult | null>(null)
   const [choices, setChoices] = useState<Record<string, string>>({})
@@ -215,13 +222,13 @@ export default function OnboardingPage() {
               <label htmlFor="onboarding-entering" className="flex flex-col gap-1">
                 <span className="font-semibold">First semester at Cornell</span>
                 <select id="onboarding-entering" value={entering} onChange={(e) => setEntering(e.target.value)} className="h-10 rounded-md border border-[#C3C9BC] bg-white px-2">
-                  {ENTERING.map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
+                  {withTerm(ENTERING, start.entering).map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
                 </select>
               </label>
               <label htmlFor="onboarding-graduating" className="flex flex-col gap-1">
                 <span className="font-semibold">Expected graduation</span>
                 <select id="onboarding-graduating" value={graduating} onChange={(e) => setGraduating(e.target.value)} className="h-10 rounded-md border border-[#C3C9BC] bg-white px-2">
-                  {GRADUATING.map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
+                  {withTerm(GRADUATING, start.graduating).map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
                 </select>
               </label>
             </div>

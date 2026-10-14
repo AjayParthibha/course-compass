@@ -59,3 +59,34 @@ export function goalFacts(g: Goals): FactCreate[] {
   if (load) facts.push({ dimension: 'term_load', value: load.id, text: load.text })
   return facts
 }
+
+type ExistingFact = Pick<components['schemas']['ProfileFact'], 'id' | 'dimension' | 'value' | 'status'>
+
+// answers that replace earlier ones instead of adding to them
+const SINGLE_VALUED = [['term_load'], ['career_track', 'grad_school']]
+
+/** Ids of earlier facts that the new answers contradict, to mark superseded before saving. */
+export function factsToSupersede(existing: ExistingFact[], next: FactCreate[]): number[] {
+  const keep = new Set(next.map((f) => `${f.dimension}:${f.value}`))
+  const groups = SINGLE_VALUED.filter((dims) => next.some((f) => dims.includes(f.dimension)))
+  return existing
+    .filter(
+      (f) =>
+        f.status !== 'superseded' &&
+        f.status !== 'rejected' &&
+        groups.some((dims) => dims.includes(f.dimension)) &&
+        !keep.has(`${f.dimension}:${f.value}`),
+    )
+    .map((f) => f.id)
+}
+
+type Setup = { program?: string | null; entering_term?: string | null; graduation_term?: string | null }
+
+/** Start from what the student already set up, so re-running onboarding doesn't reset it. */
+export function startingChoices(me: Setup | undefined, programs: string[]) {
+  return {
+    program: me?.program && programs.includes(me.program) ? me.program : programs[0],
+    entering: me?.entering_term ?? 'FA24',
+    graduating: me?.graduation_term ?? 'SP28',
+  }
+}

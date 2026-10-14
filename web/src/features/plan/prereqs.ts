@@ -10,6 +10,8 @@ export type CourseCheck = {
   concurrent: boolean
   state: CourseState
   placement: Placement | null
+  /** set when an equivalent or cross-listed course in the plan stands in for `code` */
+  via: string | null
   met: boolean
 }
 export type GroupCheck = { kind: 'all' | 'any'; items: PrereqCheck[]; met: boolean | null }
@@ -36,18 +38,31 @@ export function checkPrereqs(
 
   if (expr.kind === 'course') {
     const concurrent = expr.concurrent ?? false
+    // same rule as the backend validator: a course also counts for its cross-listings and equivalents
+    const code = norm(expr.code)
+    const counts = (p: Placement) =>
+      !!p.course && (norm(p.course) === code || (p.counts_as ?? []).some((c) => norm(c) === code))
     const matches = placements
-      .filter((p) => p.id !== target.id && p.course && norm(p.course) === norm(expr.code))
-      .sort((a, b) => at(a) - at(b))
+      .filter((p) => p.id !== target.id && counts(p))
+      .sort((a, b) => at(a) - at(b) || Number(norm(b.course!) === code) - Number(norm(a.course!) === code))
     const ok = matches.find(
       (p) => p.status === 'completed' || at(p) < targetAt || (concurrent && at(p) === targetAt),
     )
+    const via = (p: Placement | null) => (p?.course && norm(p.course) !== code ? p.course : null)
     if (ok) {
       const state = ok.status === 'completed' ? 'done' : ok.status === 'in_progress' ? 'in_progress' : 'planned'
-      return { kind: 'course', code: expr.code, concurrent, state, placement: ok, met: true }
+      return { kind: 'course', code: expr.code, concurrent, state, placement: ok, via: via(ok), met: true }
     }
     const later = matches[0] ?? null
-    return { kind: 'course', code: expr.code, concurrent, state: later ? 'late' : 'missing', placement: later, met: false }
+    return {
+      kind: 'course',
+      code: expr.code,
+      concurrent,
+      state: later ? 'late' : 'missing',
+      placement: later,
+      via: via(later),
+      met: false,
+    }
   }
 
   const items = expr.items.map((e) => checkPrereqs(e, target, placements, terms))

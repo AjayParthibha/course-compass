@@ -1,6 +1,8 @@
+import { useQueries } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router'
 import Message from './Message'
+import { proposalQuery } from './proposalQuery'
 import { latestProposalId } from './proposalState'
 import { useAdvisor } from './store'
 import { useChat } from './useChat'
@@ -13,7 +15,13 @@ export default function AdvisorPanel() {
   const { send } = useChat()
   const scroller = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
-  const latestId = useMemo(() => latestProposalId(turns.flatMap((t) => t.events)), [turns])
+  const events = useMemo(() => turns.flatMap((t) => t.events), [turns])
+  // follow each proposal's current status, so discarding the newest one re-offers the one before it
+  const current = useQueries({
+    queries: events.flatMap((e) => (e.type === 'proposal' ? [proposalQuery(e.proposal)] : [])),
+    combine: (results) => new Map(results.flatMap((r) => (r.data ? [[r.data.id, r.data] as const] : []))),
+  })
+  const latestId = latestProposalId(events, (p) => current.get(p.id) ?? p)
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight })

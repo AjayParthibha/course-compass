@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useMe, usePlan } from '../../api/hooks'
 import AdvisorPanel from '../advisor/AdvisorPanel'
 import DegreeGraph from './DegreeGraph'
-import EditNotice from './EditNotice'
-import Inspector from './Inspector'
+import EditNotice, { FOCUS_FALLBACK_ID } from './EditNotice'
+import Inspector, { INSPECTOR_ID } from './Inspector'
 import ProposalView from './ProposalView'
 import RequirementBar from './RequirementBar'
 import SemesterList from './SemesterList'
@@ -66,9 +66,30 @@ export default function PlanPage() {
   const { data: me } = useMe()
   const { data: state, error, isLoading } = usePlan()
   const edits = usePlanEdits()
-  const { selected, select, view, setView, highlightReq, notice, editError } = usePlanUI()
+  const { selected, select, view, setView, highlightReq, notice, editError, setEditError, undoneAt } = usePlanUI()
   const inspector = useRef<HTMLElement>(null)
   const lastSelected = useRef(selected)
+
+  const audit = state?.audit
+  const highlight = useMemo(
+    () =>
+      highlightReq && audit
+        ? new Set(
+            audit.requirements
+              .filter((r) => r.id === highlightReq)
+              .flatMap((r) => [...r.filled, ...r.children.flatMap((c) => c.filled)]),
+          )
+        : null,
+    [highlightReq, audit],
+  )
+
+  // an undo or an applied proposal can take the selected course out of the plan
+  const placements = state?.plan.placements
+  useEffect(() => {
+    if (selected && placements && !placements.some((p) => p.id === selected)) select(null)
+  }, [selected, placements, select])
+
+  useEffect(() => () => setEditError(null), [setEditError])
 
   // When the inspector sits below the graph, bring it into view for a new selection.
   useEffect(() => {
@@ -96,14 +117,9 @@ export default function PlanPage() {
   } else if (proposalId) {
     content = <ProposalView id={proposalId} current={state} />
   } else {
-    const highlight = highlightReq
-      ? new Set(
-          state.audit.requirements
-            .filter((r) => r.id === highlightReq)
-            .flatMap((r) => [...r.filled, ...r.children.flatMap((c) => c.filled)]),
-        )
-      : null
     const problems = state.violations.filter((v) => v.blocking)
+    // right after an undo, "Undo last change" would step further back, not undo something new
+    const canUndo = !notice?.undoable && undoneAt !== state.plan.version
 
     content = (
       <>
@@ -137,17 +153,25 @@ export default function PlanPage() {
           </div>
         </div>
 
-        <RequirementBar audit={state.audit} />
+        <RequirementBar audit={state.audit} problems={problems.length} />
 
-        {(problems.length > 0 || editError) && (
+        {editError && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent/40 bg-accent/5 px-4 py-2.5 text-[13px]">
+            <span className="text-accent">Couldn’t make that change: {editError}</span>
+            <Button className="h-8! text-[13px]" onClick={() => setEditError(null)}>
+              Dismiss
+            </Button>
+          </div>
+        )}
+
+        {problems.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent/40 bg-accent/5 px-4 py-2.5 text-[13px]">
             <div className="flex flex-col gap-0.5">
-              {editError && <span className="text-accent">{editError}</span>}
               {problems.map((v) => (
                 <span key={v.message}>{v.message}</span>
               ))}
             </div>
-            {problems.length > 0 && !notice?.undoable && (
+            {canUndo && (
               <Button disabled={edits.pending} onClick={edits.undo}>
                 Undo last change
               </Button>
@@ -156,7 +180,12 @@ export default function PlanPage() {
         )}
 
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-          <section aria-label={view === 'graph' ? 'Degree graph' : 'Semesters'} className="min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-white">
+          <section
+            id={FOCUS_FALLBACK_ID}
+            tabIndex={-1}
+            aria-label={view === 'graph' ? 'Degree graph' : 'Semesters'}
+            className="min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-white"
+          >
             {view === 'graph' ? (
               <DegreeGraph
                 state={state}
@@ -172,6 +201,8 @@ export default function PlanPage() {
           </section>
           <aside
             ref={inspector}
+            id={INSPECTOR_ID}
+            tabIndex={-1}
             aria-label="Course details"
             className="min-w-0 scroll-mt-4 rounded-xl border border-line bg-white xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:w-[300px] xl:shrink-0 xl:overflow-y-auto"
           >

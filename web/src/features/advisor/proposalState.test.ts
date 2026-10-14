@@ -32,6 +32,11 @@ describe('proposalCardState', () => {
     expect(proposalCardState(proposal(1, { status: 'discarded' }), 4, 2)).toBe('discarded')
   })
 
+  it('says an applied proposal was applied earlier once the plan has moved on', () => {
+    expect(proposalCardState(proposal(1, { status: 'applied' }), undefined, 1)).toBe('applied')
+    expect(proposalCardState(proposal(1, { status: 'applied' }), 7, 1)).toBe('applied-earlier')
+  })
+
   it('flags proposals that failed the planner check', () => {
     expect(proposalCardState(proposal(3, { violations: [blocking] }), 4, 2)).toBe('blocked')
   })
@@ -57,5 +62,24 @@ describe('latestProposalId', () => {
     ]
     expect(latestProposalId(events)).toBe(1)
     expect(latestProposalId([])).toBeNull()
+  })
+
+  it('skips a discarded proposal so the one before it stays offered', () => {
+    const events: AdvisorEvent[] = [
+      { type: 'proposal', proposal: proposal(1) },
+      { type: 'proposal', proposal: proposal(2) },
+    ]
+    const current = (p: Proposal) => (p.id === 2 ? { ...p, status: 'discarded' as const } : p)
+    expect(latestProposalId(events)).toBe(2)
+    expect(latestProposalId(events, current)).toBe(1)
+    expect(proposalCardState(proposal(1), 4, latestProposalId(events, current))).toBe('ready')
+  })
+
+  it('counts an applied proposal as the latest', () => {
+    const events: AdvisorEvent[] = [
+      { type: 'proposal', proposal: proposal(1) },
+      { type: 'proposal', proposal: proposal(2, { status: 'applied' }) },
+    ]
+    expect(latestProposalId(events)).toBe(2)
   })
 })

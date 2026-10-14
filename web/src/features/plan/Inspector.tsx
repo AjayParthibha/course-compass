@@ -10,7 +10,7 @@ import { checkPrereqs, type CourseCheck, type PrereqCheck } from './prereqs'
 import { usePlanUI } from './store'
 
 const statusText = { completed: 'Done', in_progress: 'Taking now', planned: 'Planned' }
-
+export const INSPECTOR_ID = 'plan-inspector'
 
 function requirementFor(state: PlanState, id: string) {
   for (const r of state.audit.requirements) {
@@ -30,15 +30,16 @@ const dot: Record<CourseCheck['state'], string> = {
 
 function courseStatus(c: CourseCheck) {
   const term = c.placement ? termLabel(c.placement.term) : ''
+  const via = c.via ? ` · as ${c.via}` : ''
   switch (c.state) {
     case 'done':
-      return `Done · ${term}`
+      return `Done · ${term}${via}`
     case 'in_progress':
-      return `Taking now · ${term}`
+      return `Taking now · ${term}${via}`
     case 'planned':
-      return `Planned · ${term}`
+      return `Planned · ${term}${via}`
     case 'late':
-      return `Too late · ${term}`
+      return `Too late · ${term}${via}`
     default:
       return 'Not in plan'
   }
@@ -219,8 +220,11 @@ export default function Inspector({ state }: { state: PlanState }) {
 
       <div className="flex flex-col gap-1.5">
         <SectionLabel>Needs</SectionLabel>
+        {tree && placement.status === 'completed' && (
+          <span className="text-[12.5px] text-muted">Already completed, so these aren’t checked.</span>
+        )}
         {tree ? (
-          <PrereqNode check={tree} onSelect={select} />
+          <PrereqNode check={tree} onSelect={select} settled={placement.status === 'completed'} />
         ) : courseLoading ? (
           <span className="text-[13px] text-muted">Checking prerequisites…</span>
         ) : (
@@ -276,6 +280,8 @@ export default function Inspector({ state }: { state: PlanState }) {
             onClick={() => {
               edits.remove(placement)
               select(null)
+              // the button is about to disappear; keep focus in the details panel
+              requestAnimationFrame(() => document.getElementById(INSPECTOR_ID)?.focus())
             }}
           >
             Remove from plan

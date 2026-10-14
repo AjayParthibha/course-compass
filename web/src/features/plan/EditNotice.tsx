@@ -1,17 +1,31 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { usePlan } from '../../api/hooks'
 import { usePlanEdits } from './edits'
 import { usePlanUI, type EditNotice as Notice } from './store'
 
 const UNDO_MS = 8000
 const DONE_MS = 4000
+// where focus goes when the notice closes and the element it came from is gone
+export const FOCUS_FALLBACK_ID = 'plan-view'
 
 function NoticeCard({ notice }: { notice: Notice }) {
-  const dismiss = usePlanUI((s) => s.dismissNotice)
+  const dismissNotice = usePlanUI((s) => s.dismissNotice)
+  const { data: plan } = usePlan()
   const edits = usePlanEdits()
   const card = useRef<HTMLDivElement>(null)
+  const returnTo = useRef<HTMLElement | null>(null)
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
-  const paused = notice.undoable && (hovered || focused)
+  const paused = hovered || focused
+
+  // never strand keyboard focus on <body> when the notice goes away
+  const dismiss = useCallback(() => {
+    const hadFocus = !!card.current?.contains(document.activeElement)
+    dismissNotice()
+    if (!hadFocus) return
+    const target = returnTo.current?.isConnected ? returnTo.current : document.getElementById(FOCUS_FALLBACK_ID)
+    target?.focus()
+  }, [dismissNotice])
 
   useEffect(() => {
     if (paused) return
@@ -19,13 +33,24 @@ function NoticeCard({ notice }: { notice: Notice }) {
     return () => clearTimeout(t)
   }, [notice, paused, dismiss])
 
+  // the plan changed some other way (say, a proposal was applied): this Undo would revert that instead
+  const version = plan?.plan.version
+  const undoing = edits.pending
+  useEffect(() => {
+    if (!undoing && version !== undefined && version !== notice.version) dismiss()
+  }, [version, notice.version, undoing, dismiss])
+
   return (
     <div
       ref={card}
       tabIndex={-1}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
+      onFocus={(e) => {
+        const from = e.relatedTarget
+        if (from instanceof HTMLElement && !e.currentTarget.contains(from)) returnTo.current = from
+        setFocused(true)
+      }}
       onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setFocused(false)}
       onKeyDown={(e) => e.key === 'Escape' && dismiss()}
       className="pointer-events-auto flex max-w-full items-center gap-3 rounded-lg bg-ink py-1.5 pr-1.5 pl-4 text-[13px] text-paper shadow-[0_6px_20px_rgba(23,27,23,0.25)]"
