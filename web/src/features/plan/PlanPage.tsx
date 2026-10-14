@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useMe, usePlan } from '../../api/hooks'
-import AdvisorPanel from '../advisor/AdvisorPanel'
+import AdvisorDock from '../advisor/AdvisorDock'
+import { useAdvisor } from '../advisor/store'
 import DegreeGraph from './DegreeGraph'
 import EditNotice, { FOCUS_FALLBACK_ID } from './EditNotice'
 import Inspector, { INSPECTOR_ID } from './Inspector'
@@ -39,6 +40,9 @@ function Legend({ graph }: { graph: boolean }) {
       {item('bg-white border border-line-strong', 'Planned')}
       {item('border-[1.5px] border-dashed border-[#8C9488]', 'Open slot')}
       {graph && item('bg-ink h-0.5! mt-1', 'Prerequisite chain')}
+      <span className="ml-auto text-faint">
+        {graph ? 'Select a course to see what it needs, or drag a planned course to another term.' : 'Select a course to see what it needs.'}
+      </span>
     </div>
   )
 }
@@ -52,10 +56,7 @@ function PlanSkeleton() {
         <Placeholder className="h-4 w-96 max-w-full" />
       </div>
       <Placeholder className="h-10 md:h-[72px]" />
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-        <Placeholder className="h-[480px] min-w-0 flex-1 rounded-xl" />
-        <Placeholder className="h-40 rounded-xl xl:h-[320px] xl:w-[300px]" />
-      </div>
+      <Placeholder className="h-[480px] min-w-0 rounded-xl" />
     </div>
   )
 }
@@ -102,8 +103,13 @@ export default function PlanPage() {
     el.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
   }, [selected])
 
-  const jumpToAdvisor = () =>
-    document.getElementById('advisor')?.firstElementChild?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
+  // the advisor's reasoning explains a proposal, so keep it in view while previewing one
+  useEffect(() => {
+    if (!proposalId) return
+    // wide screens keep the advisor beside the preview; on narrow ones the drawer would cover it
+    useAdvisor.getState().reveal()
+    useAdvisor.getState().setSheetOpen(false)
+  }, [proposalId])
 
   let content
   if (isLoading) {
@@ -118,6 +124,7 @@ export default function PlanPage() {
     content = <ProposalView id={proposalId} current={state} />
   } else {
     const problems = state.violations.filter((v) => v.blocking)
+    const hasSelection = state.plan.placements.some((p) => p.id === selected)
     // right after an undo, "Undo last change" would step further back, not undo something new
     const canUndo = !notice?.undoable && undoneAt !== state.plan.version
 
@@ -134,9 +141,6 @@ export default function PlanPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button className="h-8! px-2.5! text-[13px] min-[1120px]:hidden" onClick={jumpToAdvisor}>
-              Jump to advisor
-            </Button>
             <div className="flex rounded-md border border-line bg-white p-0.5" role="group" aria-label="View">
               {(['graph', 'semesters'] as const).map((v) => (
                 <button
@@ -199,27 +203,26 @@ export default function PlanPage() {
             )}
             <Legend graph={view === 'graph'} />
           </section>
+          {hasSelection && (
           <aside
             ref={inspector}
             id={INSPECTOR_ID}
             tabIndex={-1}
             aria-label="Course details"
-            className="min-w-0 scroll-mt-4 rounded-xl border border-line bg-white xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:w-[300px] xl:shrink-0 xl:overflow-y-auto"
+            className="min-w-0 scroll-mt-4 rounded-xl border border-line bg-white motion-safe:animate-sheet-fade xl:sticky xl:top-4 xl:max-h-[calc(100vh-6rem)] xl:w-[300px] xl:shrink-0 xl:overflow-y-auto"
           >
             <Inspector state={state} />
           </aside>
+          )}
         </div>
       </>
     )
   }
 
   return (
-    <main className="mx-auto flex max-w-[1680px] flex-wrap items-start gap-5 px-4 py-5 sm:px-5 sm:py-6">
-      <div className="flex min-w-0 flex-[999_1_700px] flex-col gap-4">{content}</div>
-      {/* display: contents keeps the panel a direct flex child so its sticky positioning still works */}
-      <div id="advisor" className="contents">
-        <AdvisorPanel />
-      </div>
+    <main className="mx-auto flex max-w-[1680px] items-start gap-5 px-4 pt-5 pb-24 sm:px-5 sm:pt-6">
+      <div className="flex min-w-0 flex-1 flex-col gap-4">{content}</div>
+      <AdvisorDock />
       <EditNotice />
     </main>
   )

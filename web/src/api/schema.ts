@@ -1318,7 +1318,7 @@ export interface components {
          */
         StudentUpdate: {
             /** Memory Enabled */
-            memory_enabled?: boolean | null;
+            memory_enabled: boolean;
         };
         /** StudyEventIn */
         StudyEventIn: {

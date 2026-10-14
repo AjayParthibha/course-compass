@@ -68,7 +68,7 @@ class StudentUpdate(Schema):
 
     model_config = ConfigDict(extra="forbid")
 
-    memory_enabled: bool | None = None
+    memory_enabled: bool
 
 
 MIN_CREDIT_CAP = 12

@@ -170,6 +170,10 @@ def undo(db: Session, st: models.Student) -> s.PlanState:
     while head and head.origin == "settings" and head.parent_version:
         head = version_row(db, plan, head.parent_version)
     target = version_row(db, plan, head.parent_version) if head and head.parent_version else None
+    # a settings version holds the same placements as its parent; step past it too, or the
+    # next undo would "restore" the plan the student is already looking at
+    while target and target.origin == "settings" and target.parent_version:
+        target = version_row(db, plan, target.parent_version)
     if target is None:
         return plan_state(db, st)
     placements = [s.Placement.model_validate(p) for p in target.placements]

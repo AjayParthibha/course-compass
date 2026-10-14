@@ -388,3 +388,12 @@ def test_writing_seminars_seeded_earliest(catalog):
     assert [p.term for p in out if p.slot == "fws"] == ["SP27", "FA27", "SP28", "FA28"]
     load = {t: sum(p.credits for p in out if p.term == t) for t in terms[1:]}
     assert max(load.values()) - min(load.values()) <= 3
+
+
+def test_parse_keeps_the_requirement_before_with_recommended():
+    text = (
+        "BTRY 3020, BTRY 6020, or equivalent with BTRY 3080 or MATH 4710 also highly recommended."
+    )
+    expr = parse(text)
+    assert expr is not None
+    assert "BTRY 3020" in str(expr) and "BTRY 3080" not in str(expr)

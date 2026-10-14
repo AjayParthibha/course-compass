@@ -6,6 +6,7 @@ import { cureviewsUrl } from '../../ui/links'
 import { termLabel } from '../../ui/terms'
 import { useAdvisor } from '../advisor/store'
 import { usePlanEdits } from './edits'
+import { FOCUS_FALLBACK_ID } from './EditNotice'
 import { checkPrereqs, type CourseCheck, type PrereqCheck } from './prereqs'
 import { usePlanUI } from './store'
 
@@ -142,27 +143,14 @@ function MoveSelect({ placement, state, onMove }: { placement: Placement; state:
 }
 
 export default function Inspector({ state }: { state: PlanState }) {
-  const { selected, select, view } = usePlanUI()
-  const setDraft = useAdvisor((s) => s.setDraft)
+  const { selected, select } = usePlanUI()
+  const ask = useAdvisor((s) => s.ask)
   const edits = usePlanEdits()
   const placement = state.plan.placements.find((p) => p.id === selected)
   const { data: course, isLoading: courseLoading } = useCourse(placement?.course)
 
-  if (!placement) {
-    return (
-      <div className="flex flex-col gap-2 p-4 text-[13px] text-muted">
-        {view === 'graph' ? (
-          <p className="m-0">
-            Drag a planned course to another term to move it (on a touch screen, press and hold it first), or select it
-            and use Move to another term. Every move is checked against your degree rules.
-          </p>
-        ) : (
-          <p className="m-0">Every move is checked against your degree rules.</p>
-        )}
-        <p className="m-0">Select a course to see what it needs, what it unlocks and where its information comes from, or to move it.</p>
-      </div>
-    )
-  }
+  // the panel only shows while a course is selected; PlanPage doesn't render it otherwise
+  if (!placement) return null
 
   const byId = new Map(state.plan.placements.map((p) => [p.id, p]))
   const needs = state.edges.filter((e) => e.target === placement.id).map((e) => byId.get(e.source)!)
@@ -185,7 +173,7 @@ export default function Inspector({ state }: { state: PlanState }) {
         >
           See options for this slot
         </Link>
-        <Button onClick={() => setDraft(`What should I take for the ${placement.slot_label?.toLowerCase()} slot in ${termLabel(placement.term, true)}?`)}>
+        <Button onClick={() => ask(`What should I take for the ${placement.slot_label?.toLowerCase()} slot in ${termLabel(placement.term, true)}?`)}>
           Ask the advisor
         </Button>
         {movable && (
@@ -281,14 +269,14 @@ export default function Inspector({ state }: { state: PlanState }) {
               edits.remove(placement)
               select(null)
               // the button is about to disappear; keep focus in the details panel
-              requestAnimationFrame(() => document.getElementById(INSPECTOR_ID)?.focus())
+              requestAnimationFrame(() => document.getElementById(FOCUS_FALLBACK_ID)?.focus())
             }}
           >
             Remove from plan
           </Button>
         </div>
       )}
-      <Button variant="link" className="self-start" onClick={() => setDraft(`Tell me about ${placement.course} in my plan.`)}>
+      <Button variant="link" className="self-start" onClick={() => ask(`Tell me about ${placement.course} in my plan.`)}>
         Ask the advisor about it
       </Button>
     </div>

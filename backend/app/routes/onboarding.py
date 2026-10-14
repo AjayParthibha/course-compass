@@ -73,6 +73,7 @@ def confirm(body: ConfirmRequest, db: DB, student: CurrentStudent) -> PlanState:
     plan = student.plans[0] if student.plans else models.Plan(student_id=student.id, version=0)
     db.add(plan)
     db.flush()
-    services.commit(db, plan, placements, "import", "onboarding")
+    # a new history: undo shouldn't bring back a plan built for another program or start term
+    services.commit(db, plan, placements, "import", "onboarding", parent=None)
     db.refresh(student)
     return services.plan_state(db, student)

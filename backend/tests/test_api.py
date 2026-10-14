@@ -473,3 +473,32 @@ def test_placements_list_what_they_count_as(client, auth, catalog, monkeypatch):
     with SessionLocal() as db:
         row = db.query(models.PlanVersion).order_by(models.PlanVersion.id.desc()).first()
         assert all("counts_as" not in p for p in row.placements)
+
+
+def test_undo_steps_past_a_settings_version_in_the_middle(client, auth):
+    start = onboard(client, auth).json()
+    a, b = [p for p in start["plan"]["placements"] if p["term"] == "SP27"][:2]
+    ops(client, auth, {"op": "move", "placement_id": a["id"], "term": "FA27"})
+    assert set_graduation(client, auth, "SP29").status_code == 200
+    ops(client, auth, {"op": "move", "placement_id": b["id"], "term": "SP28"})
+
+    once = client.post("/api/plan/undo", headers=auth).json()
+    assert terms_by_id(once)[b["id"]] == "SP27" and terms_by_id(once)[a["id"]] == "FA27"
+    # the next undo reaches the edit before the graduation change instead of doing nothing
+    twice = client.post("/api/plan/undo", headers=auth).json()
+    assert terms_by_id(twice) == terms_by_id(start)
+
+
+def test_onboarding_again_starts_a_fresh_history(client, auth):
+    start = onboard(client, auth).json()
+    a = next(p for p in start["plan"]["placements"] if p["term"] == "SP27")
+    ops(client, auth, {"op": "move", "placement_id": a["id"], "term": "FA27"})
+    again = onboard(client, auth).json()
+    undone = client.post("/api/plan/undo", headers=auth).json()
+    assert terms_by_id(undone) == terms_by_id(again)
+
+
+def test_memory_setting_rejects_null(client, auth):
+    onboard(client, auth)
+    res = client.patch("/api/profile/student", json={"memory_enabled": None}, headers=auth)
+    assert res.status_code == 422
