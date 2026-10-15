@@ -7,6 +7,7 @@ audit side with the CP-SAT model; these checks stay as the fast path for drags.
 from collections import defaultdict
 
 from app.catalog.store import Catalog
+from app.planner.ops import term_label
 from app.schemas.courses import AllOf, AnyOf, CourseReq, Flag, PrereqExpr
 from app.schemas.plans import Placement, Violation
 
@@ -75,7 +76,9 @@ def validate(
     terms: list[str],
     catalog: Catalog,
     max_credits: int = 18,
+    term_caps: dict[str, int] | None = None,
 ) -> list[Violation]:
+    """`term_caps` overrides `max_credits` for individual terms, e.g. {"SP27": 15}."""
     violations: list[Violation] = []
     order = {t: i for i, t in enumerate(terms)}
     courses = [p for p in placements if p.course]
@@ -146,11 +149,17 @@ def validate(
         if all(p.status == "completed" for p in items):
             continue
         total = sum(p.credits for p in items)
-        if total > max_credits:
+        cap = (term_caps or {}).get(term)
+        if total > (cap or max_credits):
+            message = (
+                f"{term_label(term)} has {total} credits, over your {cap}-credit cap for that term"
+                if cap
+                else f"{term_label(term)} has {total} credits, over your limit of {max_credits}"
+            )
             violations.append(
                 Violation(
                     kind="credits_high",
-                    message=f"{term} has {total} credits, over your limit of {max_credits}",
+                    message=message,
                     placement_ids=[p.id for p in items],
                     blocking=True,
                 )
@@ -159,7 +168,10 @@ def validate(
             violations.append(
                 Violation(
                     kind="credits_low",
-                    message=f"{term} has {total} credits, under the {MIN_CREDITS}-credit minimum",
+                    message=(
+                        f"{term_label(term)} has {total} credits, "
+                        f"under the {MIN_CREDITS}-credit minimum"
+                    ),
                     placement_ids=[p.id for p in items],
                 )
             )

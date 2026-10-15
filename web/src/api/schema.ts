@@ -78,6 +78,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plan/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Settings
+         * @description Change graduation term and credit caps. Applies to every plan of the student.
+         *
+         *     Moving graduation earlier fails with 409 while later terms still hold courses or slots.
+         */
+        patch: operations["update_settings_api_plan_settings_patch"];
+        trace?: never;
+    };
     "/api/plan/undo": {
         parameters: {
             query?: never;
@@ -727,6 +749,42 @@ export interface components {
             /** Value */
             value: string;
         };
+        /**
+         * LockOp
+         * @description Keep a placement in its term (or let it move again). Locked placements can't be moved.
+         */
+        "LockOp-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "lock";
+            /** Placement Id */
+            placement_id: string;
+            /**
+             * Locked
+             * @default true
+             */
+            locked?: boolean;
+        };
+        /**
+         * LockOp
+         * @description Keep a placement in its term (or let it move again). Locked placements can't be moved.
+         */
+        "LockOp-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            op: "lock";
+            /** Placement Id */
+            placement_id: string;
+            /**
+             * Locked
+             * @default true
+             */
+            locked: boolean;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Code */
@@ -776,7 +834,7 @@ export interface components {
         /** OpsRequest */
         OpsRequest: {
             /** Ops */
-            ops: (components["schemas"]["AddOp-Input"] | components["schemas"]["RemoveOp-Input"] | components["schemas"]["MoveOp-Input"] | components["schemas"]["ReplaceOp-Input"])[];
+            ops: (components["schemas"]["AddOp-Input"] | components["schemas"]["RemoveOp-Input"] | components["schemas"]["MoveOp-Input"] | components["schemas"]["ReplaceOp-Input"] | components["schemas"]["LockOp-Input"])[];
             /**
              * Dry Run
              * @default false
@@ -879,6 +937,20 @@ export interface components {
             /** Target */
             target: string;
         };
+        /**
+         * PlanSettingsUpdate
+         * @description Fields left out stay as they are. `term_caps` replaces the whole map.
+         */
+        PlanSettingsUpdate: {
+            /** Graduation Term */
+            graduation_term?: string | null;
+            /** Max Credits */
+            max_credits?: number | null;
+            /** Term Caps */
+            term_caps?: {
+                [key: string]: number;
+            } | null;
+        };
         /** PlanState */
         PlanState: {
             plan: components["schemas"]["Plan"];
@@ -952,7 +1024,7 @@ export interface components {
             /** Summary */
             summary: string;
             /** Ops */
-            ops: (components["schemas"]["AddOp-Output"] | components["schemas"]["RemoveOp-Output"] | components["schemas"]["MoveOp-Output"] | components["schemas"]["ReplaceOp-Output"])[];
+            ops: (components["schemas"]["AddOp-Output"] | components["schemas"]["RemoveOp-Output"] | components["schemas"]["MoveOp-Output"] | components["schemas"]["ReplaceOp-Output"] | components["schemas"]["LockOp-Output"])[];
             /**
              * Changes
              * @default []
@@ -1172,12 +1244,22 @@ export interface components {
             graduation_term: string | null;
             /** Max Credits */
             max_credits: number;
+            /**
+             * Term Caps
+             * @default {}
+             */
+            term_caps: {
+                [key: string]: number;
+            };
             /** Memory Enabled */
             memory_enabled: boolean;
             /** Onboarded */
             onboarded: boolean;
         };
-        /** StudentUpdate */
+        /**
+         * StudentUpdate
+         * @description Graduation term and credit limits change through PlanSettingsUpdate instead.
+         */
         StudentUpdate: {
             /** Program */
             program?: string | null;
@@ -1185,10 +1267,6 @@ export interface components {
             catalog_year?: string | null;
             /** Entering Term */
             entering_term?: string | null;
-            /** Graduation Term */
-            graduation_term?: string | null;
-            /** Max Credits */
-            max_credits?: number | null;
             /** Memory Enabled */
             memory_enabled?: boolean | null;
         };
@@ -1411,6 +1489,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_settings_api_plan_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Student"];
                 };
             };
             /** @description Validation Error */

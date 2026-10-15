@@ -1,6 +1,6 @@
 from app import models, services
 from app.config import get_settings
-from app.planner.ops import term_label
+from app.planner.ops import term_index, term_label
 
 SYSTEM = """You are the CourseCompass advisor for Cornell CS students. You help them plan \
 courses across their remaining semesters and pick courses that fit their goals.
@@ -32,6 +32,10 @@ def context_block(db, student: models.Student, conversation_id: int | None) -> s
             f"entered {student.entering_term}, graduating {student.graduation_term}, "
             f"max {student.max_credits} credits/term."
         )
+        if student.term_caps:
+            terms = sorted(student.term_caps, key=term_index)
+            caps = ", ".join(f"{term_label(t)}: {student.term_caps[t]}" for t in terms)
+            lines.append(f"Per-term credit caps (override the max): {caps}.")
     facts = services.visible_facts(db, student, conversation_id)
     if facts:
         lines.append("Profile:")

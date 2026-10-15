@@ -105,3 +105,84 @@ def test_chat_without_key_reports_error(client, auth):
     with client.stream("POST", "/api/chat", json={"message": "hi"}, headers=auth) as res:
         body = "".join(res.iter_text())
     assert '"type":"error"' in body and '"type":"done"' in body
+
+
+def test_per_term_credit_caps(client, auth):
+    onboard(client, auth)
+    res = client.patch(
+        "/api/plan/settings", json={"max_credits": 20, "term_caps": {"SP27": 15}}, headers=auth
+    )
+    assert res.status_code == 200
+    assert res.json()["max_credits"] == 20 and res.json()["term_caps"] == {"SP27": 15}
+    assert client.get("/api/auth/me", headers=auth).json()["term_caps"] == {"SP27": 15}
+
+    add = [{"op": "add", "term": "SP27", "course": c} for c in ["CS 3110", "CS 4820", "CS 4740"]]
+    state = client.post("/api/plan/ops", json={"ops": add, "dry_run": True}, headers=auth).json()
+    high = [v["message"] for v in state["violations"] if v["kind"] == "credits_high"]
+    assert high == ["Spring ’27 has 18 credits, over your 15-credit cap for that term"]
+
+    client.patch("/api/plan/settings", json={"term_caps": {}}, headers=auth)
+    state = client.post("/api/plan/ops", json={"ops": add, "dry_run": True}, headers=auth).json()
+    assert not [v for v in state["violations"] if v["kind"] == "credits_high"]
+
+
+def test_settings_validation(client, auth):
+    onboard(client, auth)
+
+    def patch(body):
+        return client.patch("/api/plan/settings", json=body, headers=auth).status_code
+
+    assert patch({"term_caps": {"FA24": 15}}) == 400  # already taken
+    assert patch({"term_caps": {"SP27": 40}}) == 422
+    assert patch({"max_credits": 6}) == 422
+    assert patch({"graduation_term": "SP25"}) == 400
+    assert patch({"graduation_term": "Spring 2028"}) == 422
+    assert client.get("/api/auth/me", headers=auth).json()["max_credits"] == 18
+
+
+def test_extend_graduation(client, auth):
+    onboard(client, auth)
+    before = client.get("/api/plan", headers=auth).json()["plan"]
+    res = client.patch(
+        "/api/plan/settings",
+        json={"graduation_term": "SP29", "term_caps": {"FA28": 14}},
+        headers=auth,
+    )
+    assert res.status_code == 200 and res.json()["graduation_term"] == "SP29"
+    after = client.get("/api/plan", headers=auth).json()["plan"]
+    assert after["terms"][-3:] == ["SP28", "FA28", "SP29"]
+    assert after["placements"] == before["placements"]
+
+    # shortening again is fine while the dropped terms are empty; their caps go too
+    res = client.patch("/api/plan/settings", json={"graduation_term": "SP28"}, headers=auth)
+    assert res.status_code == 200 and res.json()["term_caps"] == {}
+
+
+def test_shorten_graduation_keeps_placements(client, auth):
+    onboard(client, auth)
+    res = client.patch("/api/plan/settings", json={"graduation_term": "FA27"}, headers=auth)
+    assert res.status_code == 409
+    assert "(Spring ’28: " in res.json()["detail"] and "4000+ electives" in res.json()["detail"]
+    assert client.get("/api/auth/me", headers=auth).json()["graduation_term"] == "SP28"
+    assert client.get("/api/plan", headers=auth).json()["plan"]["terms"][-1] == "SP28"
+
+
+def test_lock_placement(client, auth):
+    state = onboard(client, auth).json()
+    slot = next(p for p in state["plan"]["placements"] if p["term"] == "SP27")
+    lock = {"op": "lock", "placement_id": slot["id"], "locked": True}
+    locked = client.post("/api/plan/ops", json={"ops": [lock]}, headers=auth).json()
+    assert next(p for p in locked["plan"]["placements"] if p["id"] == slot["id"])["locked"]
+
+    move = {"op": "move", "placement_id": slot["id"], "term": "FA27"}
+    res = client.post("/api/plan/ops", json={"ops": [move]}, headers=auth)
+    assert res.status_code == 400 and "Unlock it" in res.json()["detail"]
+
+    unlock = lock | {"locked": False}
+    moved = client.post("/api/plan/ops", json={"ops": [unlock, move]}, headers=auth).json()
+    p = next(p for p in moved["plan"]["placements"] if p["id"] == slot["id"])
+    assert p["term"] == "FA27" and not p["locked"]
+
+    undone = client.post("/api/plan/undo", headers=auth).json()["plan"]["placements"]
+    p = next(p for p in undone if p["id"] == slot["id"])
+    assert p["term"] == "SP27" and p["locked"]

@@ -155,6 +155,7 @@ export const student: Student = {
   entering_term: 'FA24',
   graduation_term: 'SP28',
   max_credits: 18,
+  term_caps: {},
   memory_enabled: true,
   onboarded: true,
 }

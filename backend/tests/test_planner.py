@@ -1,11 +1,13 @@
+import pytest
+
 from app.catalog.prereq_parse import parse
 from app.catalog.store import Catalog
 from app.planner.audit import audit, matches_filter
-from app.planner.ops import apply_ops
+from app.planner.ops import OpError, apply_ops
 from app.planner.validate import validate
 from app.requirements.loader import get_program
 from app.schemas.courses import AllOf, AnyOf, CourseReq, Flag
-from app.schemas.plans import MoveOp, Placement
+from app.schemas.plans import LockOp, MoveOp, Placement
 from app.schemas.requirements import CourseFilter
 
 TERMS = ["FA24", "SP25", "FA25", "SP26", "FA26", "SP27"]
@@ -165,3 +167,22 @@ def test_move_op(catalog):
     plan = [place("CS 4740", "FA26", pid="a")]
     moved = apply_ops(plan, [MoveOp(placement_id="a", term="SP27")], catalog)
     assert moved[0].term == "SP27" and plan[0].term == "FA26"
+
+
+def test_locked_placement_cannot_move(catalog):
+    plan = [place("CS 4740", "FA26", pid="a")]
+    locked = apply_ops(plan, [LockOp(placement_id="a")], catalog)
+    assert locked[0].locked and not plan[0].locked
+    with pytest.raises(OpError, match="kept in Fall ’26"):
+        apply_ops(locked, [MoveOp(placement_id="a", term="SP27")], catalog)
+    unlock = LockOp(placement_id="a", locked=False)
+    moved = apply_ops(locked, [unlock, MoveOp(placement_id="a", term="SP27")], catalog)
+    assert moved[0].term == "SP27"
+
+
+def test_term_cap_overrides_default(catalog):
+    plan = [place(c, "FA26") for c in ["CS 1110", "CS 2800", "MATH 1910", "CS 4740"]]
+    assert not [v for v in validate(plan, TERMS, catalog) if v.kind == "credits_high"]
+    capped = validate(plan, TERMS, catalog, term_caps={"FA26": 15})
+    high = [v.message for v in capped if v.kind == "credits_high"]
+    assert high == ["Fall ’26 has 16 credits, over your 15-credit cap for that term"]

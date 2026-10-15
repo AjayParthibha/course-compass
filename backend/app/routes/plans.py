@@ -4,6 +4,7 @@ from app import services
 from app.planner.ops import OpError
 from app.routes.auth import DB, CurrentStudent
 from app.schemas.plans import OpsRequest, PlanState, Proposal
+from app.schemas.profile import PlanSettingsUpdate, Student
 
 router = APIRouter(tags=["plans"])
 
@@ -27,6 +28,23 @@ def apply_ops(body: OpsRequest, db: DB, student: CurrentStudent) -> PlanState:
         raise HTTPException(400, str(e)) from None
     except services.NotReady:
         raise HTTPException(409, "finish onboarding first") from None
+
+
+@router.patch("/plan/settings")
+def update_settings(body: PlanSettingsUpdate, db: DB, student: CurrentStudent) -> Student:
+    """Change graduation term and credit caps. Applies to every plan of the student.
+
+    Moving graduation earlier fails with 409 while later terms still hold courses or slots.
+    """
+    try:
+        services.update_plan_settings(db, student, **body.model_dump(exclude_none=True))
+    except services.SettingsConflict as e:
+        raise HTTPException(409, str(e)) from None
+    except services.NotReady:
+        raise HTTPException(409, "finish onboarding first") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    return services.student_schema(student)
 
 
 @router.post("/plan/undo")

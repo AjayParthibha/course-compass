@@ -8,7 +8,7 @@ from app import models
 from app.catalog.store import get_catalog
 from app.config import get_settings
 from app.planner.audit import audit
-from app.planner.ops import apply_ops, terms_between
+from app.planner.ops import apply_ops, term_index, term_label, terms_between
 from app.planner.validate import prereq_edges, validate
 from app.requirements.loader import get_program
 from app.schemas import plans as s
@@ -25,6 +25,10 @@ class Stale(Exception):
     pass
 
 
+class SettingsConflict(Exception):
+    """A settings change would drop terms that still have courses in them."""
+
+
 def student_schema(st: models.Student) -> Student:
     return Student(
         id=st.id,
@@ -34,6 +38,7 @@ def student_schema(st: models.Student) -> Student:
         entering_term=st.entering_term,
         graduation_term=st.graduation_term,
         max_credits=st.max_credits,
+        term_caps=st.term_caps or {},
         memory_enabled=st.memory_enabled,
         onboarded=bool(st.plans),
     )
@@ -86,7 +91,9 @@ def evaluate(st: models.Student, plan: s.Plan) -> s.PlanState:
     return s.PlanState(
         plan=plan,
         audit=audit(plan.placements, program_for(st), catalog),
-        violations=validate(plan.placements, plan.terms, catalog, st.max_credits),
+        violations=validate(
+            plan.placements, plan.terms, catalog, st.max_credits, term_caps=st.term_caps
+        ),
         edges=[s.PlanEdge(source=a, target=b) for a, b in prereq_edges(plan.placements, catalog)],
     )
 
@@ -138,6 +145,69 @@ def undo(db: Session, st: models.Student) -> s.PlanState:
     return plan_state(db, st)
 
 
+# how far past the current term a graduation date may be set
+MAX_TERMS_AHEAD = 8
+
+
+def update_plan_settings(
+    db: Session,
+    st: models.Student,
+    graduation_term: str | None = None,
+    max_credits: int | None = None,
+    term_caps: dict[str, int] | None = None,
+) -> None:
+    """Change graduation term and credit caps for every plan of the student.
+
+    Raises ValueError for terms out of range and SettingsConflict when an earlier
+    graduation would drop terms that still hold placements.
+    """
+    if not (st.entering_term and st.graduation_term):
+        raise NotReady
+    current = get_settings().current_term
+    grad = graduation_term or st.graduation_term
+    if graduation_term and graduation_term != st.graduation_term:
+        offset = term_index(grad) - term_index(current)
+        if not 0 <= offset <= MAX_TERMS_AHEAD:
+            raise ValueError(
+                f"graduation has to be between {term_label(current)} and "
+                f"{MAX_TERMS_AHEAD // 2} years from now"
+            )
+    try:
+        terms = terms_between(st.entering_term, grad)
+    except ValueError:
+        raise ValueError(f"{term_label(grad)} isn't reachable from {st.entering_term}") from None
+
+    if grad != st.graduation_term:
+        keep = set(terms)
+        stranded: dict[str, dict[str, None]] = {}
+        for plan in st.plans:
+            for p in current_placements(db, plan):
+                if p.term not in keep:
+                    name = p.course or p.slot_label or "an open slot"
+                    stranded.setdefault(p.term, {})[name] = None
+        if stranded:
+            dropped = "; ".join(
+                f"{term_label(t)}: {', '.join(stranded[t])}"
+                for t in sorted(stranded, key=term_index)
+            )
+            raise SettingsConflict(
+                f"Graduating in {term_label(grad)} would drop terms that still have courses "
+                f"or slots ({dropped}). Move or remove them first."
+            )
+
+    if term_caps is not None:
+        for term in term_caps:
+            if term not in terms or term_index(term) < term_index(current):
+                raise ValueError(f"{term_label(term)} isn't a remaining term in your plan")
+        st.term_caps = dict(term_caps)
+    else:
+        st.term_caps = {t: c for t, c in (st.term_caps or {}).items() if t in terms}
+    st.graduation_term = grad
+    if max_credits is not None:
+        st.max_credits = max_credits
+    db.commit()
+
+
 def proposal_schema(row: models.Proposal) -> s.Proposal:
     return s.Proposal(
         id=row.id,
@@ -167,7 +237,11 @@ def create_proposal(
     if not any(v.kind == "prereq" for v in blocking):
         checks.append("Every prerequisite still comes before the course that needs it")
     if not any(v.kind == "credits_high" for v in blocking):
-        checks.append(f"No term goes above {st.max_credits} credits")
+        checks.append(
+            "No term goes above its credit cap"
+            if st.term_caps
+            else f"No term goes above {st.max_credits} credits"
+        )
     row = models.Proposal(
         plan_id=plan.id,
         base_version=plan.version,

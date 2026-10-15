@@ -60,7 +60,15 @@ class ReplaceOp(Schema):
     course: str
 
 
-PlanOp = Annotated[AddOp | RemoveOp | MoveOp | ReplaceOp, Field(discriminator="op")]
+class LockOp(Schema):
+    """Keep a placement in its term (or let it move again). Locked placements can't be moved."""
+
+    op: Literal["lock"] = "lock"
+    placement_id: str
+    locked: bool = True
+
+
+PlanOp = Annotated[AddOp | RemoveOp | MoveOp | ReplaceOp | LockOp, Field(discriminator="op")]
 
 ViolationKind = Literal[
     "prereq", "coreq", "credits_high", "credits_low", "offering", "duplicate", "unknown_course"
