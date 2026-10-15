@@ -33,12 +33,18 @@ def parse(body: ParseRequest, student: CurrentStudent) -> ParseResult:
 def confirm(body: ConfirmRequest, db: DB, student: CurrentStudent) -> PlanState:
     """Save the confirmed history and create the student's first plan."""
     current = get_settings().current_term
+    try:
+        terms = terms_between(body.entering_term, body.graduation_term)
+    except ValueError:
+        raise HTTPException(
+            400, f"{body.entering_term} to {body.graduation_term} isn't a valid range of terms"
+        ) from None
     student.program = body.program
     student.entering_term = body.entering_term
     student.graduation_term = body.graduation_term
     student.catalog_year = _catalog_year(body.program, body.entering_term)
-
-    terms = terms_between(body.entering_term, body.graduation_term)
+    # caps only make sense for terms still in the (possibly new) plan
+    student.term_caps = {t: c for t, c in (student.term_caps or {}).items() if t in terms}
     now = terms.index(current) if current in terms else len(terms)
     placements = []
     for c in body.courses:

@@ -23,7 +23,7 @@ function applyOps(ps: Placement[], ops: PlanOp[]): Placement[] {
     if (op.op === 'replace')
       out = out.map((p) =>
         p.id === op.placement_id
-          ? { ...p, course: op.course, title: fx.titles[op.course] ?? op.course, slot_label: null }
+          ? { ...p, course: op.course, title: fx.titles[op.course] ?? op.course, slot_label: null, counts_as: [] }
           : p,
       )
     if (op.op === 'add')
@@ -38,6 +38,7 @@ function applyOps(ps: Placement[], ops: PlanOp[]): Placement[] {
         status: 'planned',
         locked: false,
         origin: 'user',
+        counts_as: [],
       })
   }
   return out

@@ -34,6 +34,7 @@ requirements:
     kind: filter
     filter: {title_prefix: "FWS:"}
     count: 2
+    seed: earliest
     notes: Matched by roster title; every FWS title starts with "FWS:".
 
   - id: ls

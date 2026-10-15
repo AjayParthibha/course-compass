@@ -10,3 +10,4 @@ requirements:
     kind: filter
     filter: {title_prefix: "FWS:"}
     count: 2
+    seed: earliest

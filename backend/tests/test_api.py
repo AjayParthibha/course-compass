@@ -1,3 +1,9 @@
+import json
+
+import pytest
+
+from app.planner.ops import OpError
+
 HISTORY = """FA24 CS 1110 / MATH 1910
 SP25 CS 2110, CS 2800
 FA25 ECON 1110 (4cr)
@@ -225,6 +231,7 @@ def test_settings_validation(client, auth):
         return client.patch("/api/plan/settings", json=body, headers=auth).status_code
 
     assert patch({"term_caps": {"FA24": 15}}) == 400  # already taken
+    assert patch({"term_caps": {"FA26": 15}}) == 400  # current term
     assert patch({"term_caps": {"SP27": 40}}) == 422
     assert patch({"max_credits": 6}) == 422
     assert patch({"graduation_term": "SP25"}) == 400
@@ -278,3 +285,191 @@ def test_lock_placement(client, auth):
     undone = client.post("/api/plan/undo", headers=auth).json()["plan"]["placements"]
     p = next(p for p in undone if p["id"] == slot["id"])
     assert p["term"] == "SP27" and p["locked"]
+
+
+def ops(client, auth, *edits):
+    res = client.post("/api/plan/ops", json={"ops": list(edits)}, headers=auth)
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def terms_by_id(state):
+    return {p["id"]: p["term"] for p in state["plan"]["placements"]}
+
+
+def test_undo_walks_back_through_history(client, auth):
+    start = onboard(client, auth).json()
+    a, b = [p for p in start["plan"]["placements"] if p["term"] == "SP27"][:2]
+    ops(client, auth, {"op": "move", "placement_id": a["id"], "term": "FA27"})
+    ops(client, auth, {"op": "move", "placement_id": b["id"], "term": "SP28"})
+
+    once = client.post("/api/plan/undo", headers=auth).json()
+    assert terms_by_id(once)[a["id"]] == "FA27" and terms_by_id(once)[b["id"]] == "SP27"
+    twice = client.post("/api/plan/undo", headers=auth).json()
+    assert terms_by_id(twice) == terms_by_id(start)
+    # nothing left to undo
+    again = client.post("/api/plan/undo", headers=auth).json()
+    assert terms_by_id(again) == terms_by_id(start)
+    assert again["plan"]["version"] == twice["plan"]["version"]
+
+    # an edit after undoing starts a new branch of history
+    ops(client, auth, {"op": "move", "placement_id": b["id"], "term": "FA27"})
+    back = client.post("/api/plan/undo", headers=auth).json()
+    assert terms_by_id(back) == terms_by_id(start)
+
+
+def empty_spring_28(client, auth):
+    state = onboard(client, auth).json()
+    sp28 = [p for p in state["plan"]["placements"] if p["term"] == "SP28"]
+    return ops(
+        client, auth, *[{"op": "move", "placement_id": p["id"], "term": "FA27"} for p in sp28]
+    )
+
+
+def set_graduation(client, auth, term):
+    return client.patch("/api/plan/settings", json={"graduation_term": term}, headers=auth)
+
+
+def test_graduation_change_is_a_new_version(client, auth):
+    before = empty_spring_28(client, auth)["plan"]
+    proposal_id = propose(auth, "Add CS 4780", [{"op": "add", "term": "FA27", "course": "CS 4780"}])
+
+    assert set_graduation(client, auth, "FA27").status_code == 200
+    after = client.get("/api/plan", headers=auth).json()["plan"]
+    assert after["version"] == before["version"] + 1
+    assert after["placements"] == before["placements"]
+    assert client.get(f"/api/proposals/{proposal_id}", headers=auth).json()["status"] == "outdated"
+    assert client.post(f"/api/proposals/{proposal_id}/apply", headers=auth).status_code == 409
+
+
+def test_undo_refuses_versions_outside_the_plan_terms(client, auth):
+    empty_spring_28(client, auth)
+    assert set_graduation(client, auth, "FA27").status_code == 200
+
+    # undo skips the graduation change and would bring back Spring ’28 placements
+    res = client.post("/api/plan/undo", headers=auth)
+    assert res.status_code == 409 and "Spring ’28" in res.json()["detail"]
+    state = client.get("/api/plan", headers=auth).json()
+    assert all(p["term"] in state["plan"]["terms"] for p in state["plan"]["placements"])
+
+    slot = next(p for p in state["plan"]["placements"] if p["slot"] and not p["course"])
+    url = f"/api/slots/{slot['slot']}/candidates"
+    assert client.get(url, params={"term": "FA27"}, headers=auth).status_code == 200
+
+    # with Spring ’28 back in the plan, the undo goes through
+    assert set_graduation(client, auth, "SP28").status_code == 200
+    res = client.post("/api/plan/undo", headers=auth)
+    assert res.status_code == 200
+    assert any(p["term"] == "SP28" for p in res.json()["plan"]["placements"])
+
+
+def test_ops_outside_plan_terms_are_rejected(client, auth):
+    onboard(client, auth)
+    add = {"op": "add", "term": "SP29", "course": "CS 3110"}
+    res = client.post("/api/plan/ops", json={"ops": [add]}, headers=auth)
+    assert res.status_code == 400 and "Spring ’29 isn't in your plan" in res.json()["detail"]
+
+
+def test_preview_of_outdated_proposal_is_409(client, auth):
+    onboard(client, auth)
+    proposal_id = propose(auth, "Add CS 3110", [{"op": "add", "term": "FA26", "course": "CS 3110"}])
+    assert client.post(f"/api/proposals/{proposal_id}/preview", headers=auth).status_code == 200
+    ops(client, auth, {"op": "add", "term": "SP27", "course": "CS 4820"})
+    res = client.post(f"/api/proposals/{proposal_id}/preview", headers=auth)
+    assert res.status_code == 409 and "earlier version of your plan" in res.json()["detail"]
+    assert client.post(f"/api/proposals/{proposal_id}/apply", headers=auth).status_code == 409
+
+
+def test_advisor_cannot_lock_or_touch_locked(client, auth):
+    import pydantic
+
+    from app.advisor.tools import REGISTRY
+
+    state = onboard(client, auth).json()
+    ops_schema = json.dumps(REGISTRY["propose_changes"].schema()["parameters"]["properties"]["ops"])
+    assert '"remove"' in ops_schema and '"lock"' not in ops_schema
+    slot = next(p for p in state["plan"]["placements"] if p["term"] == "SP27")
+    with pytest.raises(pydantic.ValidationError):
+        propose(auth, "Unlock", [{"op": "lock", "placement_id": slot["id"], "locked": False}])
+
+    ops(client, auth, {"op": "lock", "placement_id": slot["id"]})
+    with pytest.raises(OpError, match="locked in Spring ’27 by the student"):
+        propose(auth, "Drop it", [{"op": "remove", "placement_id": slot["id"]}])
+
+
+def test_not_interested_covers_cross_listings(client, auth, catalog, monkeypatch):
+    monkeypatch.setattr(catalog.get("GOVT 1111"), "cross_listed", ["PSYCH 1101"])
+    monkeypatch.setattr(catalog.get("PSYCH 1101"), "cross_listed", ["GOVT 1111"])
+    onboard(client, auth)
+    url, params = "/api/slots/ls/candidates", {"term": "SP27", "limit": 10}
+
+    fact = client.put("/api/courses/PSYCH 1101/not-interested", headers=auth).json()
+    hidden = client.get(url, params=params, headers=auth).json()["hidden"]
+    assert [(h["course"]["code"], h["fact_id"]) for h in hidden] == [("GOVT 1111", fact["id"])]
+    # marking the code the slot shows doesn't add a second fact
+    again = client.put("/api/courses/GOVT 1111/not-interested", headers=auth).json()
+    assert again["id"] == fact["id"]
+    facts = client.get("/api/profile", headers=auth).json()["facts"]
+    assert [f["id"] for f in facts if f["dimension"] == "not_interested"] == [fact["id"]]
+
+    # "show again" on the shown code removes the fact saved under the other one
+    assert client.delete("/api/courses/GOVT 1111/not-interested", headers=auth).status_code == 204
+    assert client.get(url, params=params, headers=auth).json()["hidden"] == []
+
+
+def test_student_update_only_takes_known_fields(client, auth):
+    onboard(client, auth)
+
+    def patch(body):
+        return client.patch("/api/profile/student", json=body, headers=auth)
+
+    # stale clients that still send plan settings here get told so
+    assert patch({"graduation_term": "SP29"}).status_code == 422
+    assert patch({"max_credits": 12}).status_code == 422
+    assert patch({"entering_term": "FA28"}).status_code == 422
+    assert patch({"memory_enabled": False}).json()["memory_enabled"] is False
+    me = client.get("/api/auth/me", headers=auth).json()
+    assert (me["entering_term"], me["graduation_term"], me["max_credits"]) == ("FA24", "SP28", 18)
+    assert client.get("/api/plan", headers=auth).status_code == 200
+
+
+def test_onboarding_again_prunes_term_caps(client, auth):
+    onboard(client, auth)
+    caps = {"SP28": 15, "FA28": 14, "SP29": 14}
+    res = client.patch(
+        "/api/plan/settings", json={"graduation_term": "SP29", "term_caps": caps}, headers=auth
+    )
+    assert res.status_code == 200
+    onboard(client, auth)  # graduates SP28 again
+    me = client.get("/api/auth/me", headers=auth).json()
+    assert me["graduation_term"] == "SP28" and me["term_caps"] == {"SP28": 15}
+
+
+def test_onboarding_rejects_backwards_terms(client, auth):
+    body = {"program": "cs-eng", "entering_term": "FA24", "graduation_term": "SP24", "courses": []}
+    res = client.post("/api/onboarding/confirm", json=body, headers=auth)
+    assert res.status_code == 400
+
+
+def test_placements_list_what_they_count_as(client, auth, catalog, monkeypatch):
+    from app import models
+    from app.models import SessionLocal
+
+    monkeypatch.setattr(catalog.get("CS 4780"), "cross_listed", ["ORIE 4741"])
+    monkeypatch.setitem(catalog.prereq_equivalents, "CS 1110", ["CS 1112"])
+    state = onboard(client, auth).json()
+    by_course = {p["course"]: p for p in state["plan"]["placements"] if p["course"]}
+    assert by_course["CS 1110"]["counts_as"] == ["CS 1112"]
+    assert by_course["CS 2110"]["counts_as"] == []
+    assert all(p["counts_as"] == [] for p in state["plan"]["placements"] if not p["course"])
+
+    add = {"op": "add", "term": "SP27", "course": "CS 4780"}
+    dry = client.post("/api/plan/ops", json={"ops": [add], "dry_run": True}, headers=auth).json()
+    assert next(p for p in dry["plan"]["placements"] if p["course"] == "CS 4780")["counts_as"] == [
+        "ORIE 4741"
+    ]
+
+    # computed for responses only, not saved with the plan
+    with SessionLocal() as db:
+        row = db.query(models.PlanVersion).order_by(models.PlanVersion.id.desc()).first()
+        assert all("counts_as" not in p for p in row.placements)

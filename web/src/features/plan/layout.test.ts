@@ -4,6 +4,7 @@ import { chain, layoutPlan } from './layout'
 
 const p = (id: string, term: string, course: string): Placement => ({
   id, term, course, title: null, slot: null, slot_label: null, credits: 4, status: 'planned', locked: false, origin: 'user',
+  counts_as: [],
 })
 
 const audit: AuditResult = {

@@ -31,7 +31,9 @@ def run_validate(s: Scenario, catalog, program) -> dict:
     """Baseline: apply the requested edits as-is and check the result."""
     placements = s.placements(catalog)
     try:
-        placements = apply_ops(placements, parse_ops.validate_python(s.resolved_ops()), catalog)
+        placements = apply_ops(
+            placements, parse_ops.validate_python(s.resolved_ops()), catalog, s.terms
+        )
     except OpError as e:
         return {"predicted": "infeasible", "error": str(e)}
     violations = validate(placements, s.terms, catalog, s.max_credits)

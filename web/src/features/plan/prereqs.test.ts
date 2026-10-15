@@ -6,7 +6,7 @@ const TERMS = ['FA25', 'SP26', 'FA26', 'SP27']
 
 const p = (course: string, term: string, status: Placement['status'] = 'planned'): Placement => ({
   id: course.replace(' ', '').toLowerCase(), term, course, title: null, slot: null, slot_label: null,
-  credits: 4, status, locked: false, origin: 'user',
+  credits: 4, status, locked: false, origin: 'user', counts_as: [],
 })
 
 const c = (code: string, concurrent = false): PrereqExpr => ({ kind: 'course', code, concurrent })
