@@ -35,6 +35,17 @@ describe('checkPrereqs', () => {
     expect(res.met).toBe(false)
   })
 
+  it('counts equivalents and cross-listings the way the validator does', () => {
+    // CS 2800 asks for MATH 1110; an Engineering student took MATH 1910, which counts as it
+    const cs2800 = p('CS 2800', 'SP26')
+    const math1910 = { ...p('MATH 1910', 'FA25', 'completed'), counts_as: ['MATH 1110', 'MATH 1120'] }
+    const res = checkPrereqs(c('MATH 1110'), cs2800, [math1910, cs2800], TERMS) as CourseCheck
+    expect(res).toMatchObject({ state: 'done', met: true, via: 'MATH 1910' })
+
+    const direct = checkPrereqs(c('MATH 1910'), cs2800, [math1910, cs2800], TERMS) as CourseCheck
+    expect(direct.via).toBeNull()
+  })
+
   it('is met when one alternative is satisfied', () => {
     const plan = [p('CS 2800', 'FA25', 'completed'), p('CS 2110', 'SP26', 'completed'), target]
     const res = checkPrereqs(cs4820, target, plan, TERMS)
