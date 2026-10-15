@@ -32,6 +32,9 @@ class Requirement(Schema):
     double_count: list[str] = []
     source_url: str | None = None
     notes: str | None = None
+    # where the starter plan puts open slots for it: spread to balance load, or in the
+    # earliest remaining terms (first-year writing seminars)
+    seed: Literal["spread", "earliest"] = "spread"
 
     @model_validator(mode="after")
     def check_shape(self):

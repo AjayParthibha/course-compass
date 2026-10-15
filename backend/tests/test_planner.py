@@ -4,12 +4,13 @@ from app.catalog.prereq_parse import parse
 from app.catalog.store import Catalog
 from app.planner.audit import audit, matches_filter
 from app.planner.eligible import list_eligible
+from app.planner.initial import seed_slots
 from app.planner.ops import OpError, apply_ops
 from app.planner.validate import validate
 from app.requirements.loader import get_program
 from app.schemas.courses import AllOf, AnyOf, CourseReq, Flag
 from app.schemas.plans import AddOp, LockOp, MoveOp, Placement, RemoveOp, ReplaceOp
-from app.schemas.requirements import CourseFilter
+from app.schemas.requirements import CourseFilter, Program, Requirement, RequirementSet
 
 TERMS = ["FA24", "SP25", "FA25", "SP26", "FA26", "SP27"]
 
@@ -232,3 +233,31 @@ def test_advisor_respects_locks(catalog):
     assert apply_ops(plan, [RemoveOp(placement_id="a")], catalog, TERMS) == []
     swapped = apply_ops(plan, [ReplaceOp(placement_id="a", course="CS 4780")], catalog, TERMS)
     assert swapped[0].course == "CS 4780"
+
+
+def test_writing_seminars_seeded_earliest(catalog):
+    def req(id, seed="spread"):
+        return Requirement(
+            id=id, label=id, kind="filter", filter=CourseFilter(min_level=1000), count=4, seed=seed
+        )
+
+    program = Program(
+        id="p",
+        label="p",
+        college="c",
+        catalog_year="2024-25",
+        sets=[
+            RequirementSet(
+                id="s",
+                label="s",
+                catalog_year="2024-25",
+                source_url="https://example.com",
+                requirements=[req("ls"), req("fws", "earliest")],
+            )
+        ],
+    )
+    terms = ["FA26", "SP27", "FA27", "SP28", "FA28", "SP29"]
+    out = seed_slots([], terms, "FA26", program, catalog)
+    assert [p.term for p in out if p.slot == "fws"] == ["SP27", "FA27", "SP28", "FA28"]
+    load = {t: sum(p.credits for p in out if p.term == t) for t in terms[1:]}
+    assert max(load.values()) - min(load.values()) <= 3
