@@ -107,11 +107,13 @@ export function auditFor(ps: Placement[]): PlanState['audit'] {
     const filled = ps.filter((p) => reqOf[p.id] === id || p.slot === id)
     const enough = filled.length >= needed
     const done = enough && filled.slice(0, needed).every((p) => p.status === 'completed')
+    const chosen = filled.filter((p) => p.course).length
     return {
       id,
       label,
       needed,
       filled: filled.map((p) => p.id),
+      open_slots: Math.max(0, Math.min(filled.length, needed) - Math.min(chosen, needed)),
       status: id === 'aae' ? 'flagged' : done ? 'done' : enough ? 'planned' : 'missing',
       children: [],
     }

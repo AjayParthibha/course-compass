@@ -80,6 +80,9 @@ class RequirementStatus(Schema):
     status: Literal["done", "planned", "missing", "flagged"]
     needed: int
     filled: list[str] = []
+    # how many of the `needed` seats (or children) are only held by an open slot,
+    # so the UI can tell "chosen" apart from "room left in the plan"
+    open_slots: int = 0
     children: list[RequirementStatus] = []
 
 

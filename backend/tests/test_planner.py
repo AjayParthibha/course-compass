@@ -143,6 +143,18 @@ def test_audit_counts_courses(catalog):
     assert not result.complete
 
 
+def test_audit_separates_open_slots_from_courses(catalog):
+    program = get_program("cs-eng", "2024-25")
+    plan = [
+        place("ECON 1110", "FA25", 3, "completed"),
+        Placement(id="slot1", term="SP27", slot="ls", slot_label="Liberal studies", credits=3),
+    ]
+    by_id = {r.id: r for r in audit(plan, program, catalog).requirements}
+    assert by_id["ls"].status == "planned"
+    assert by_id["ls"].filled == ["slot1", "ECON 1110"]
+    assert by_id["ls"].open_slots == 1
+
+
 def test_title_prefix_filter(catalog):
     fws = catalog.get("GOVT 1111").model_copy(update={"title": "FWS: Politics and Writing"})
     assert matches_filter(fws, CourseFilter(title_prefix="FWS:"))

@@ -1115,6 +1115,11 @@ export interface components {
              */
             filled: string[];
             /**
+             * Open Slots
+             * @default 0
+             */
+            open_slots: number;
+            /**
              * Children
              * @default []
              */
