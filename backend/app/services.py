@@ -239,7 +239,7 @@ def update_plan_settings(
 
     if term_caps is not None:
         for term in term_caps:
-            if term not in terms or term_index(term) < term_index(current):
+            if term not in terms or term_index(term) <= term_index(current):
                 raise ValueError(f"{term_label(term)} isn't a remaining term in your plan")
         st.term_caps = dict(term_caps)
     else:

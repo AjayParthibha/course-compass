@@ -231,6 +231,7 @@ def test_settings_validation(client, auth):
         return client.patch("/api/plan/settings", json=body, headers=auth).status_code
 
     assert patch({"term_caps": {"FA24": 15}}) == 400  # already taken
+    assert patch({"term_caps": {"FA26": 15}}) == 400  # current term
     assert patch({"term_caps": {"SP27": 40}}) == 422
     assert patch({"max_credits": 6}) == 422
     assert patch({"graduation_term": "SP25"}) == 400
@@ -414,3 +415,37 @@ def test_not_interested_covers_cross_listings(client, auth, catalog, monkeypatch
     # "show again" on the shown code removes the fact saved under the other one
     assert client.delete("/api/courses/GOVT 1111/not-interested", headers=auth).status_code == 204
     assert client.get(url, params=params, headers=auth).json()["hidden"] == []
+
+
+def test_student_update_only_takes_known_fields(client, auth):
+    onboard(client, auth)
+
+    def patch(body):
+        return client.patch("/api/profile/student", json=body, headers=auth)
+
+    # stale clients that still send plan settings here get told so
+    assert patch({"graduation_term": "SP29"}).status_code == 422
+    assert patch({"max_credits": 12}).status_code == 422
+    assert patch({"entering_term": "FA28"}).status_code == 422
+    assert patch({"memory_enabled": False}).json()["memory_enabled"] is False
+    me = client.get("/api/auth/me", headers=auth).json()
+    assert (me["entering_term"], me["graduation_term"], me["max_credits"]) == ("FA24", "SP28", 18)
+    assert client.get("/api/plan", headers=auth).status_code == 200
+
+
+def test_onboarding_again_prunes_term_caps(client, auth):
+    onboard(client, auth)
+    caps = {"SP28": 15, "FA28": 14, "SP29": 14}
+    res = client.patch(
+        "/api/plan/settings", json={"graduation_term": "SP29", "term_caps": caps}, headers=auth
+    )
+    assert res.status_code == 200
+    onboard(client, auth)  # graduates SP28 again
+    me = client.get("/api/auth/me", headers=auth).json()
+    assert me["graduation_term"] == "SP28" and me["term_caps"] == {"SP28": 15}
+
+
+def test_onboarding_rejects_backwards_terms(client, auth):
+    body = {"program": "cs-eng", "entering_term": "FA24", "graduation_term": "SP24", "courses": []}
+    res = client.post("/api/onboarding/confirm", json=body, headers=auth)
+    assert res.status_code == 400
