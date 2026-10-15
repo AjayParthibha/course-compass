@@ -19,7 +19,9 @@ const basisTag = (r: Candidate['reasons'][number]) => {
   return <Tag kind="guess">My guess · not confirmed</Tag>
 }
 
-function CandidateCard({ c, term, onPick, onHide }: { c: Candidate; term: string; onPick: () => void; onHide: () => void }) {
+type CardProps = { c: Candidate; term: string; canPick: boolean; onPick: () => void; onHide: () => void }
+
+function CandidateCard({ c, term, canPick, onPick, onHide }: CardProps) {
   const titleId = useId()
   return (
     <article aria-labelledby={titleId} className="flex flex-col gap-4 rounded-xl border border-line bg-white p-4 sm:p-5">
@@ -31,7 +33,7 @@ function CandidateCard({ c, term, onPick, onHide }: { c: Candidate; term: string
           <h2 id={titleId} className="m-0 text-xl font-extrabold tracking-tight">{c.course.title}</h2>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="primary" className={touch} aria-describedby={titleId} onClick={onPick}>
+          <Button variant="primary" className={touch} aria-describedby={titleId} disabled={!canPick} onClick={onPick}>
             Put it in {termLabel(term)}
           </Button>
           <Button className={touch} aria-describedby={titleId} onClick={onHide}>
@@ -106,14 +108,14 @@ function ReviewsLink({ code, href }: { code: string; href?: string }) {
   )
 }
 
-function HiddenRow({ course, onUndo, busy }: { course: CourseSummary; onUndo: () => void; busy: boolean }) {
+function HiddenRow({ course, onUndo }: { course: CourseSummary; onUndo: () => void }) {
   return (
     <li className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line-soft py-2 first:border-t-0">
       <span className="min-w-0">
         <span className="font-mono text-[13px] font-semibold">{course.code}</span>{' '}
         <span className="text-muted">{course.title}</span>
       </span>
-      <Button variant="quiet" className={`${touch} font-semibold`} aria-label={`Show again: ${course.code}`} disabled={busy} onClick={onUndo}>
+      <Button variant="quiet" className={`${touch} font-semibold`} aria-label={`Show again: ${course.code}`} onClick={onUndo}>
         Show again
       </Button>
     </li>
@@ -165,20 +167,25 @@ function Sidebar({ data }: { data: SlotCandidates | undefined }) {
   )
 }
 
-function SlotOptions({ slotId, term, placementId }: { slotId: string; term: string; placementId: string | null }) {
+const MORE = 50
+
+function SlotOptions({ slotId, term: urlTerm, placementId }: { slotId: string; term: string; placementId: string | null }) {
   const navigate = useNavigate()
   const { data: state } = usePlan()
   const ops = usePlanOps()
-  const { hide, unhide } = useNotForMe()
+  const { hide, unhide, hiding, undoing } = useNotForMe()
   const [limit, setLimit] = useState(3)
-  const [hiding, setHiding] = useState<string[]>([])
-  const [undoing, setUndoing] = useState<string[]>([])
   const [lastHidden, setLastHidden] = useState<CourseSummary | null>(null)
-  const { data, isLoading, error } = useCandidates(slotId, term, limit)
   const switchId = useId()
 
   const slots = state ? openSlots(state) : []
   const here = slots.find((p) => p.id === placementId)
+  // e.g. after going Back from the plan: the slot this page was opened for has a course now
+  const placement = state?.plan.placements.find((p) => p.id === placementId)
+  const stale = !!placementId && !!state && !here
+  // the slot may have moved to another term since the link was made
+  const term = here?.term ?? urlTerm
+  const { data, isLoading, isPlaceholderData, error } = useCandidates(slotId, term, limit)
   const slotLabel = data?.slot_label ?? here?.slot_label ?? slotId
 
   const pick = (code: string) => {
@@ -189,24 +196,16 @@ function SlotOptions({ slotId, term, placementId }: { slotId: string; term: stri
   }
 
   const hideCourse = (course: CourseSummary) => {
-    setHiding((h) => [...h, course.code])
     setLastHidden(course)
-    hide.mutate(course.code, { onSettled: () => setHiding((h) => h.filter((x) => x !== course.code)) })
-  }
-
-  const undo = (code: string) => {
-    setUndoing((u) => [...u, code])
-    unhide.mutate(code, {
-      onSuccess: () => setLastHidden((l) => (l?.code === code ? null : l)),
-      onSettled: () => setUndoing((u) => u.filter((x) => x !== code)),
-    })
+    hide.mutate(course.code)
   }
 
   const visible = data?.candidates.filter((c) => !hiding.includes(c.course.code)) ?? []
-  const hidden = data?.hidden.filter((h) => !undoing.includes(h.course.code)) ?? []
-  const showLast =
-    lastHidden && (hiding.includes(lastHidden.code) || hidden.some((h) => h.course.code === lastHidden.code))
+  const hidden = data?.hidden.filter((h) => !undoing.includes(h.fact_id)) ?? []
+  const lastFact = lastHidden && hidden.find((h) => h.course.code === lastHidden.code)?.fact_id
+  const showLast = lastHidden && (hiding.includes(lastHidden.code) || lastFact != null)
   const olderHidden = hidden.filter((h) => h.course.code !== (showLast ? lastHidden.code : null))
+  const expanded = limit >= MORE
   const ranked = !!data && (data.factors.length > 0 || data.candidates.some((c) => c.reasons.length > 0))
   const mutationError = ops.error ?? hide.error ?? unhide.error
 
@@ -225,6 +224,16 @@ function SlotOptions({ slotId, term, placementId }: { slotId: string; term: stri
         <h1 className="m-0 max-w-3xl text-[28px] leading-tight font-extrabold tracking-tight sm:text-[34px]">
           {data ? `Options for ${data.slot_label}` : 'Finding options…'}
         </h1>
+        {stale && (
+          <p role="status" className="m-0 flex max-w-3xl flex-wrap items-baseline gap-x-2 rounded-lg bg-chip px-3.5 py-2">
+            <span>
+              {placement?.course
+                ? `This slot has been filled with ${placement.course}.`
+                : 'This slot is no longer open in your plan.'}
+            </span>
+            <Link to="/explore" className="font-semibold">See open slots</Link>
+          </p>
+        )}
         {data && (
           <p className="m-0 max-w-3xl text-base text-muted">
             {data.eligible_count} {data.eligible_count === 1 ? 'course' : 'courses'} would satisfy this slot in{' '}
@@ -278,8 +287,8 @@ function SlotOptions({ slotId, term, placementId }: { slotId: string; term: stri
                   variant="quiet"
                   className={`${touch} font-semibold`}
                   aria-label={`Undo hiding ${lastHidden.code}`}
-                  disabled={hiding.includes(lastHidden.code) || undoing.includes(lastHidden.code)}
-                  onClick={() => undo(lastHidden.code)}
+                  disabled={lastFact == null}
+                  onClick={() => lastFact != null && unhide.mutate(lastFact)}
                 >
                   Undo
                 </Button>
@@ -295,19 +304,32 @@ function SlotOptions({ slotId, term, placementId }: { slotId: string; term: stri
             </p>
           )}
           {visible.map((c) => (
-            <CandidateCard key={c.course.code} c={c} term={term} onPick={() => pick(c.course.code)} onHide={() => hideCourse(c.course)} />
+            <CandidateCard
+              key={c.course.code}
+              c={c}
+              term={term}
+              canPick={!stale && !ops.isPending}
+              onPick={() => pick(c.course.code)}
+              onHide={() => hideCourse(c.course)}
+            />
           ))}
-          {data && data.eligible_count > limit && (
-            <Button variant="link" className={`${touch} self-start`} onClick={() => setLimit(50)}>
+          {isPlaceholderData && <p className="m-0 text-muted">Loading more…</p>}
+          {data && !expanded && data.eligible_count > data.candidates.length && (
+            <Button variant="link" className={`${touch} self-start`} onClick={() => setLimit(MORE)}>
               See more of the {data.eligible_count} eligible courses
             </Button>
+          )}
+          {data && expanded && !isPlaceholderData && data.eligible_count > data.candidates.length && (
+            <p className="m-0 text-[13px] text-muted">
+              Showing the first {data.candidates.length} of {data.eligible_count}.
+            </p>
           )}
           {olderHidden.length > 0 && (
             <section aria-label="Courses you marked not for me" className="flex flex-col gap-1 rounded-xl border border-line p-4">
               <SectionLabel>Not for me · {olderHidden.length}</SectionLabel>
               <ul className="m-0 flex list-none flex-col p-0">
                 {olderHidden.map((h) => (
-                  <HiddenRow key={h.course.code} course={h.course} busy={undoing.includes(h.course.code)} onUndo={() => undo(h.course.code)} />
+                  <HiddenRow key={h.course.code} course={h.course} onUndo={() => unhide.mutate(h.fact_id)} />
                 ))}
               </ul>
             </section>
@@ -329,7 +351,8 @@ export default function ExplorePage() {
   if (!slotId) return <SlotIndex />
   if (!term) {
     if (!state) return <div className="p-10 text-muted">Loading…</div>
-    const p = openSlots(state).find((s) => s.id === placementId || s.slot === slotId)
+    const open = openSlots(state)
+    const p = open.find((s) => s.id === placementId) ?? open.find((s) => s.slot === slotId)
     return <Navigate to={p ? slotHref(p) : '/explore'} replace />
   }
   return <SlotOptions key={`${slotId}|${term}|${placementId}`} slotId={slotId} term={term} placementId={placementId} />

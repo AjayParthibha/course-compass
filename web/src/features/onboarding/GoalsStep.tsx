@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router'
 import { api, unwrap } from '../../api/client'
 import { keys, useUpdatePlanSettings } from '../../api/hooks'
 import { Button } from '../../ui'
-import { AFTER, emptyGoals, goalFacts, type Goals, INTERESTS, LOADS } from './goals'
+import { AFTER, emptyGoals, factsToSupersede, goalFacts, type Goals, INTERESTS, LOADS } from './goals'
 
 const chip =
   'inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-full border border-[#C3C9BC] bg-white px-3.5 ' +
@@ -35,6 +35,14 @@ export default function GoalsStep() {
         const have = new Set(
           existing.filter((f) => f.status === 'stated').map((f) => `${f.dimension}:${f.value}`),
         )
+        // a new answer to a single-choice question replaces the old one instead of stacking
+        for (const factId of factsToSupersede(existing, facts))
+          await unwrap(
+            api.PATCH('/api/profile/facts/{fact_id}', {
+              params: { path: { fact_id: factId } },
+              body: { status: 'superseded' },
+            }),
+          )
         for (const body of facts)
           if (!have.has(`${body.dimension}:${body.value}`)) await unwrap(api.POST('/api/profile/facts', { body }))
         qc.invalidateQueries({ queryKey: keys.profile })

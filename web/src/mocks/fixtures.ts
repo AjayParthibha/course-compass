@@ -13,7 +13,7 @@ import type {
 } from '../api/types'
 
 export const TERMS = ['FA24', 'SP25', 'FA25', 'SP26', 'FA26', 'SP27', 'FA27', 'SP28']
-const CURRENT = 'FA26'
+export const CURRENT = 'FA26'
 
 // code, title, credits, term, requirement, typically offered
 type Row = [string, string, number, string, string, string]
@@ -128,7 +128,7 @@ export function auditFor(ps: Placement[]): PlanState['audit'] {
 
 const idOf = (code: string) => code.replace(' ', '').toLowerCase()
 
-export function planState(ps: Placement[] = placements, version = 4): PlanState {
+export function planState(ps: Placement[] = placements, version = 4, terms = TERMS): PlanState {
   const ids = new Set(ps.map((p) => p.id))
   return {
     plan: {
@@ -136,7 +136,7 @@ export function planState(ps: Placement[] = placements, version = 4): PlanState 
       name: 'Plan A',
       version,
       program: 'cs-eng',
-      terms: TERMS,
+      terms,
       current_term: CURRENT,
       placements: ps,
     },

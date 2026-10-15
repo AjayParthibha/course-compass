@@ -1,6 +1,6 @@
 import type { AdvisorEvent, Proposal } from '../../api/types'
 
-export type ProposalCardState = 'ready' | 'blocked' | 'replaced' | 'outdated' | 'applied' | 'discarded'
+export type ProposalCardState = 'ready' | 'blocked' | 'replaced' | 'outdated' | 'applied' | 'applied-earlier' | 'discarded'
 
 export const hasBlocking = (p: Proposal) => p.violations.some((v) => v.blocking)
 
@@ -9,14 +9,20 @@ export const isOutdated = (p: Proposal, planVersion: number | undefined) =>
   p.status === 'outdated' || (p.status === 'pending' && planVersion !== undefined && planVersion !== p.base_version)
 
 /**
- * The newest proposal in the conversation that passed the planner check. A suggestion that
- * failed the check doesn't replace an earlier one that passed.
+ * The newest proposal in the conversation that is still on the table (pending and passed the
+ * planner check) or was applied. A suggestion that failed the check or was discarded doesn't
+ * replace an earlier one. `current` gives each proposal's latest known state.
  */
-export function latestProposalId(events: AdvisorEvent[]): number | null {
+export function latestProposalId(
+  events: AdvisorEvent[],
+  current: (p: Proposal) => Proposal = (p) => p,
+): number | null {
   let latest: number | null = null
   for (const e of events) {
-    if (e.type === 'proposal' && !hasBlocking(e.proposal) && (latest === null || e.proposal.id > latest))
-      latest = e.proposal.id
+    if (e.type !== 'proposal') continue
+    const p = current(e.proposal)
+    const counts = p.status === 'applied' || (p.status === 'pending' && !hasBlocking(p))
+    if (counts && (latest === null || p.id > latest)) latest = p.id
   }
   return latest
 }
@@ -27,7 +33,10 @@ export function proposalCardState(
   planVersion: number | undefined,
   latestId: number | null,
 ): ProposalCardState {
-  if (p.status === 'applied' || p.status === 'discarded') return p.status
+  // applying bumps the plan version by one; anything after that means the plan has moved on
+  if (p.status === 'applied')
+    return planVersion !== undefined && planVersion !== p.base_version + 1 ? 'applied-earlier' : 'applied'
+  if (p.status === 'discarded') return p.status
   if (hasBlocking(p)) return 'blocked'
   if (latestId !== null && p.id !== latestId) return 'replaced'
   if (isOutdated(p, planVersion)) return 'outdated'

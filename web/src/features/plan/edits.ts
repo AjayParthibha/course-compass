@@ -1,5 +1,5 @@
 import { usePlanOps, useUndo } from '../../api/hooks'
-import type { Placement } from '../../api/types'
+import type { Placement, PlanOp, PlanState } from '../../api/types'
 import { termLabel } from '../../ui/terms'
 import { usePlanUI } from './store'
 
@@ -19,35 +19,38 @@ export function describeRemove(p: Placement) {
 export function usePlanEdits() {
   const ops = usePlanOps()
   const undo = useUndo()
-  const { notify, setEditError } = usePlanUI.getState()
+  const { notify, setEditError, setUndoneAt } = usePlanUI.getState()
   const onError = (e: Error) => setEditError(e.message)
+
+  const edit = (op: PlanOp, text: string) => {
+    setEditError(null)
+    ops.mutate([op], {
+      onSuccess: (state: PlanState) => {
+        setUndoneAt(null)
+        notify(text, state.plan.version)
+      },
+      onError,
+    })
+  }
 
   return {
     pending: ops.isPending || undo.isPending,
-    move: (p: Placement, term: string) =>
-      ops.mutate([{ op: 'move', placement_id: p.id, term }], {
-        onSuccess: () => notify(describeMove(p, term)),
-        onError,
-      }),
-    remove: (p: Placement) =>
-      ops.mutate([{ op: 'remove', placement_id: p.id }], {
-        onSuccess: () => notify(describeRemove(p)),
-        onError,
-      }),
+    move: (p: Placement, term: string) => edit({ op: 'move', placement_id: p.id, term }, describeMove(p, term)),
+    remove: (p: Placement) => edit({ op: 'remove', placement_id: p.id }, describeRemove(p)),
     lock: (p: Placement, locked: boolean) =>
-      ops.mutate([{ op: 'lock', placement_id: p.id, locked }], {
-        onSuccess: () =>
-          notify(
-            locked
-              ? `Keeping ${placementName(p)} in ${termLabel(p.term)}`
-              : `${placementName(p)} can move again`,
-          ),
-        onError,
-      }),
-    undo: () =>
+      edit(
+        { op: 'lock', placement_id: p.id, locked },
+        locked ? `Keeping ${placementName(p)} in ${termLabel(p.term)}` : `${placementName(p)} can move again`,
+      ),
+    undo: () => {
+      setEditError(null)
       undo.mutate(undefined, {
-        onSuccess: () => notify('Change undone', false),
+        onSuccess: (state: PlanState) => {
+          setUndoneAt(state.plan.version)
+          notify('Change undone', state.plan.version, false)
+        },
         onError,
-      }),
+      })
+    },
   }
 }

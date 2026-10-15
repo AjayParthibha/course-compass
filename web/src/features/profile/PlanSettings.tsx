@@ -4,7 +4,7 @@ import { usePlan, useUpdatePlanSettings } from '../../api/hooks'
 import type { Student } from '../../api/types'
 import { Button, SectionLabel } from '../../ui'
 import { termLabel } from '../../ui/terms'
-import { capsToSave, CREDIT_MAX, CREDIT_MIN, creditError, termsAfter } from './settings'
+import { capsIn, capsToSave, CREDIT_MAX, CREDIT_MIN, creditError, termsAfter } from './settings'
 
 const inputClass =
   'h-10 rounded-md border bg-white px-2 aria-invalid:border-accent'
@@ -25,6 +25,8 @@ export default function PlanSettings({ student }: { student: Student }) {
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const [saved, setSaved] = useState(false)
 
+  // the remaining terms come from the plan; until it loads, saving would drop every cap
+  const loaded = !!state
   const current = state?.plan.current_term
   const options = current ? termsAfter(current) : []
   if (grad && !options.includes(grad)) options.unshift(grad)
@@ -37,9 +39,10 @@ export default function PlanSettings({ student }: { student: Student }) {
   const invalid = !!limitError || Object.values(capErrors).some(Boolean)
   const body = { graduation_term: grad, max_credits: Number(limit), term_caps: capsToSave(caps, remaining) }
   const dirty =
-    grad !== student.graduation_term ||
-    body.max_credits !== student.max_credits ||
-    !sameCaps(body.term_caps, student.term_caps)
+    loaded &&
+    (grad !== student.graduation_term ||
+      body.max_credits !== student.max_credits ||
+      !sameCaps(body.term_caps, capsIn(student.term_caps, remaining)))
 
   const conflict = save.error instanceof ApiError && save.error.status === 409 ? save.error.message : null
   const otherError = save.error && !conflict ? save.error.message : null
@@ -52,7 +55,7 @@ export default function PlanSettings({ student }: { student: Student }) {
       requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus())
       return
     }
-    if (!dirty) return
+    if (!loaded || !dirty) return
     save.mutate(body, { onSuccess: () => setSaved(true) })
   }
   const edit = () => {
@@ -82,6 +85,7 @@ export default function PlanSettings({ student }: { student: Student }) {
                 id={`${id}-grad`}
                 value={grad}
                 onChange={(e) => setGrad(e.target.value)}
+                disabled={!loaded}
                 aria-describedby={`${id}-grad-hint${conflict ? ` ${id}-grad-error` : ''}`}
                 aria-invalid={!!conflict || undefined}
                 className={`${inputClass} max-w-[220px] border-[#C3C9BC]`}
@@ -105,6 +109,7 @@ export default function PlanSettings({ student }: { student: Student }) {
                 step={1}
                 value={limit}
                 onChange={(e) => setLimit(e.target.value)}
+                disabled={!loaded}
                 onBlur={() => setTouched((t) => ({ ...t, limit: true }))}
                 aria-describedby={`${id}-limit-hint${show('limit') && limitError ? ` ${id}-limit-error` : ''}`}
                 aria-invalid={(show('limit') && !!limitError) || undefined}
@@ -124,7 +129,8 @@ export default function PlanSettings({ student }: { student: Student }) {
             <span id={`${id}-caps-hint`} className="mb-2 text-[13px] text-muted">
               Optional. Leave a term blank to use your default{limitError ? '' : ` of ${limit}`}.
             </span>
-            {remaining.length === 0 && <span className="text-muted">No terms left after this one.</span>}
+            {!loaded && <span className="text-muted">Loading your plan…</span>}
+            {loaded && remaining.length === 0 && <span className="text-muted">No terms left after this one.</span>}
             <ul className="m-0 list-none p-0">
               {remaining.map((t) => {
                 const err = show(t) ? capErrors[t] : null
