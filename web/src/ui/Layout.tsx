@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { NavLink, Outlet, useNavigate } from 'react-router'
+import { NavLink, Outlet, useMatch, useNavigate } from 'react-router'
 import { auth } from '../api/client'
 import { useMe, usePlan } from '../api/hooks'
 import { Logo } from '.'
@@ -34,6 +34,8 @@ export default function Layout() {
   const { data: me } = useMe()
   const qc = useQueryClient()
   const navigate = useNavigate()
+  // the plan fills the screen below the header on wide screens, so the advisor can run its full height
+  const fullHeight = useMatch('/plan') !== null
 
   const signOut = () => {
     auth.clear()
@@ -45,7 +47,7 @@ export default function Layout() {
     `rounded-md px-2.5 py-2 no-underline sm:px-3 ${isActive ? 'bg-chip font-semibold text-ink' : 'text-muted'}`
 
   return (
-    <div className="min-h-screen">
+    <div className={fullHeight ? 'min-h-screen lg:flex lg:h-dvh lg:min-h-0 lg:flex-col' : 'min-h-screen'}>
       <header className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line bg-paper px-4 py-2 sm:gap-x-7 sm:px-5 sm:py-2.5">
         <NavLink to="/plan" className="flex items-center gap-2 text-ink no-underline">
           <Logo />

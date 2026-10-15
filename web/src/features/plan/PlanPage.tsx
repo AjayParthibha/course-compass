@@ -220,8 +220,11 @@ export default function PlanPage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-[1680px] items-start gap-5 px-4 pt-5 pb-24 sm:px-5 sm:pt-6">
-      <div className="flex min-w-0 flex-1 flex-col gap-4">{content}</div>
+    <main className="lg:flex lg:min-h-0 lg:flex-1">
+      {/* on wide screens the plan scrolls on its own, beside the full-height advisor */}
+      <div className="min-w-0 flex-1 lg:overflow-y-auto">
+        <div className="mx-auto flex max-w-[1680px] flex-col gap-4 px-4 pt-5 pb-24 sm:px-5 sm:pt-6">{content}</div>
+      </div>
       <AdvisorDock />
       <EditNotice />
     </main>

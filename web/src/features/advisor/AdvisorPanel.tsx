@@ -50,11 +50,7 @@ export default function AdvisorPanel({ variant, onClose, focusInput = false }: P
   return (
     <div
       id="advisor-panel"
-      className={
-        variant === 'side'
-          ? 'flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-paper'
-          : 'flex h-full min-h-0 flex-col overflow-hidden bg-paper'
-      }
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-paper"
     >
       <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0">

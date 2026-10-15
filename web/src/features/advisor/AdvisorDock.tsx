@@ -14,10 +14,29 @@ function ChatIcon() {
   )
 }
 
-type PillProps = { unread: boolean; onOpen: () => void; ref: React.Ref<HTMLButtonElement> }
+type OpenerProps = { unread: boolean; onOpen: () => void; ref: React.Ref<HTMLButtonElement> }
 
-/** What's left of the advisor when it's collapsed: a small message box that opens it. */
-function AdvisorPill({ unread, onOpen, ref }: PillProps) {
+/** What's left of the docked advisor when it's collapsed: a slim full-height tab on the right edge that opens it. */
+function AdvisorRail({ unread, onOpen, ref }: OpenerProps) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onOpen}
+      aria-expanded={false}
+      aria-label={unread ? 'Open the advisor, new reply' : 'Open the advisor'}
+      title="Open the advisor"
+      className={`flex w-11 shrink-0 flex-col items-center gap-3 border-l border-line bg-paper py-4 transition-colors hover:bg-chip hover:text-ink focus-visible:-outline-offset-2! motion-safe:animate-sheet-fade ${unread ? 'text-ink' : 'text-muted'}`}
+    >
+      <ChatIcon />
+      <span className="text-[13px] font-semibold tracking-wide [writing-mode:vertical-rl]">Advisor</span>
+      {unread && <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-accent" />}
+    </button>
+  )
+}
+
+/** What's left of the drawer on narrow screens: a small message box that opens it. */
+function AdvisorPill({ unread, onOpen, ref }: OpenerProps) {
   return (
     <button
       ref={ref}
@@ -46,7 +65,10 @@ function AdvisorPill({ unread, onOpen, ref }: PillProps) {
   )
 }
 
-/** The advisor beside the plan: a docked panel on wide screens, a drawer from the right on narrow ones, and a small pill when collapsed. */
+/**
+ * The advisor beside the plan: a full-height panel docked on the right on wide screens (a slim tab on the
+ * right edge when collapsed), and a drawer from the right on narrow ones (a small pill when closed).
+ */
 export default function AdvisorDock() {
   const wide = useMediaQuery(WIDE_QUERY)
   const roomy = useMediaQuery(ROOMY)
@@ -80,11 +102,11 @@ export default function AdvisorDock() {
 
   if (wide) {
     return sideOpen ? (
-      <aside aria-label="Advisor" className="sticky top-4 h-[calc(100vh-96px)] min-h-[520px] w-[min(380px,32vw)] min-w-[320px] shrink-0">
+      <aside aria-label="Advisor" className="flex w-[min(380px,32vw)] min-w-[320px] shrink-0 flex-col border-l border-line">
         <AdvisorPanel variant="side" focusInput={focusOnOpen} onClose={() => close(() => setOpen(false))} />
       </aside>
     ) : (
-      <AdvisorPill ref={opener} unread={unread} onOpen={() => openByHand(() => setOpen(true))} />
+      <AdvisorRail ref={opener} unread={unread} onOpen={() => openByHand(() => setOpen(true))} />
     )
   }
 
