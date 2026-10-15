@@ -21,7 +21,11 @@ export default function SemesterList({ state }: { state: PlanState }) {
                 <li key={p.id}>
                   <button
                     type="button"
-                    onClick={() => select(p.id)}
+                    onClick={(e) => {
+                      if (selected !== p.id) return select(p.id)
+                      select(null)
+                      if (e.detail) e.currentTarget.blur() // mouse click, not Enter/Space
+                    }}
                     aria-current={selected === p.id || undefined}
                     className={`flex w-full items-baseline gap-2 border-0 px-3 py-1.5 text-left ${selected === p.id ? 'bg-chip' : 'bg-transparent'}`}
                   >

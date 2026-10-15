@@ -230,7 +230,16 @@ export default function DegreeGraph({
           edges={flowEdges}
           nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
-          onNodeClick={(_, node) => node.type === 'course' && !node.id.startsWith('ghost-') && onSelect?.(node.id)}
+          onNodeClick={(e, node) => {
+            if (node.type !== 'course' || node.id.startsWith('ghost-') || !onSelect) return
+            // clicking the selected card again clears the selection and lets go of focus
+            if (node.id === selected) {
+              onSelect(null)
+              ;(e.target as HTMLElement).closest<HTMLElement>('.react-flow__node')?.blur()
+            } else {
+              onSelect(node.id)
+            }
+          }}
           onPaneClick={() => onSelect?.(null)}
           onKeyDown={(e) => {
             const el = e.target as HTMLElement
@@ -238,7 +247,7 @@ export default function DegreeGraph({
             if (!onSelect || !id || !plan.placements.some((p) => p.id === id)) return
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault()
-              onSelect(id)
+              onSelect(id === selected ? null : id)
             } else if (e.key === 'Escape') {
               onSelect(null)
             }
