@@ -183,7 +183,34 @@ export const handlers = [
 
   http.get('/api/slots/:slot/candidates', ({ params, request }) => {
     const term = new URL(request.url).searchParams.get('term') ?? 'SP28'
-    return HttpResponse.json(fx.candidates(params.slot as string, term))
+    const all = fx.candidates(params.slot as string, term)
+    const notForMe = new Map(db.facts.filter((f) => f.dimension === 'not_interested').map((f) => [f.value, f.id]))
+    return HttpResponse.json({
+      ...all,
+      eligible_count: all.eligible_count - notForMe.size,
+      candidates: all.candidates.filter((c) => !notForMe.has(c.course.code)),
+      hidden: all.candidates
+        .filter((c) => notForMe.has(c.course.code))
+        .map((c) => ({ course: c.course, fact_id: notForMe.get(c.course.code)! })),
+    })
+  }),
+  http.put('/api/courses/:code/not-interested', ({ params }) => {
+    const code = params.code as string
+    const fact = {
+      ...db.facts[0],
+      id: Date.now(),
+      dimension: 'not_interested',
+      value: code,
+      text: `Not interested in ${code}`,
+      status: 'stated',
+      evidence: 'Marked “Not for me” on Explore',
+    } as ProfileFact
+    db.facts.push(fact)
+    return HttpResponse.json(fact)
+  }),
+  http.delete('/api/courses/:code/not-interested', ({ params }) => {
+    db.facts = db.facts.filter((f) => !(f.dimension === 'not_interested' && f.value === params.code))
+    return new HttpResponse(null, { status: 204 })
   }),
 
   http.post('/api/onboarding/parse', () =>
