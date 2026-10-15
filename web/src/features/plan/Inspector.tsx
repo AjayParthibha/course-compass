@@ -10,7 +10,7 @@ import { checkPrereqs, type CourseCheck, type PrereqCheck } from './prereqs'
 import { usePlanUI } from './store'
 
 const statusText = { completed: 'Done', in_progress: 'Taking now', planned: 'Planned' }
-
+export const INSPECTOR_ID = 'plan-inspector'
 
 function requirementFor(state: PlanState, id: string) {
   for (const r of state.audit.requirements) {
@@ -273,6 +273,8 @@ export default function Inspector({ state }: { state: PlanState }) {
             onClick={() => {
               edits.remove(placement)
               select(null)
+              // the button is about to disappear; keep focus in the details panel
+              requestAnimationFrame(() => document.getElementById(INSPECTOR_ID)?.focus())
             }}
           >
             Remove from plan
