@@ -81,6 +81,133 @@ def test_parse_ignores_recommended():
     assert parse("Recommended prerequisite: CS 3110.") is None
 
 
+def any_of(*cs):
+    return AnyOf(items=codes(*cs))
+
+
+def all_of(*cs):
+    return AllOf(items=codes(*cs))
+
+
+def test_parse_oxford_list_ends_at_its_last_or():
+    # ASTRO 3303: two lists, one of each
+    expr = parse(
+        "MATH 1120, MATH 1910, or MATH 1920, PHYS 1112, PHYS 1116, or PHYS 2217 "
+        "or permission of instructor."
+    )
+    assert expr == AllOf(
+        items=[
+            any_of("MATH 1120", "MATH 1910", "MATH 1920"),
+            any_of("PHYS 1112", "PHYS 1116", "PHYS 2217"),
+        ]
+    )
+    # "A, or B, or C" is still one list, and so is a list closed by "or equivalent"
+    assert parse("AEM 2600, or ECON 3030, or AEM 2420, or equivalents.") == any_of(
+        "AEM 2600", "ECON 3030", "AEM 2420"
+    )
+    assert parse("MATH 2210, MATH 2230, MATH 2310, MATH 2940, or equivalent.") == any_of(
+        "MATH 2210", "MATH 2230", "MATH 2310", "MATH 2940"
+    )
+    # ...unless its items have their own alternatives
+    assert parse(
+        "BIOMG 2800 or BIOEE 1780, BTRY 3080 or BTRY 3010, BTRY 4810, or equivalents."
+    ) == (
+        AllOf(
+            items=[
+                any_of("BIOMG 2800", "BIOEE 1780"),
+                any_of("BTRY 3080", "BTRY 3010"),
+                *codes("BTRY 4810"),
+            ]
+        )
+    )
+
+
+def test_parse_one_of_starts_at_the_phrase():
+    expr = parse("AEM 2100, one of the following: AEM 2600, ECON 3030 or ECON 3130, and MATH 1110.")
+    assert expr == AllOf(
+        items=[
+            *codes("AEM 2100"),
+            any_of("AEM 2600", "ECON 3030", "ECON 3130"),
+            *codes("MATH 1110"),
+        ]
+    )
+
+
+def test_parse_groups_with_and():
+    # MATH 3230: each example is a pair of courses
+    expr = parse(
+        "Prerequisite: multivariable calculus and linear algebra (e.g., MATH 2210-MATH 2220, "
+        "MATH 2230-MATH 2240, or MATH 1920 and MATH 2940), or permission of instructor."
+    )
+    assert expr == AnyOf(
+        items=[
+            all_of("MATH 2210", "MATH 2220"),
+            all_of("MATH 2230", "MATH 2240"),
+            all_of("MATH 1920", "MATH 2940"),
+        ]
+    )
+    # MATH 6340: one "and" clause inside the parentheses
+    expr = parse(
+        "modules and ideals (e.g., strong performance in MATH 4330 and either MATH 3340 or "
+        "MATH 4340), or permission of instructor."
+    )
+    assert expr == AllOf(items=[*codes("MATH 4330"), any_of("MATH 3340", "MATH 4340")])
+    # and/or is just "or"
+    assert parse("analysis (e.g., MATH 4130 and/or MATH 4140)") == any_of("MATH 4130", "MATH 4140")
+
+
+def test_parse_hyphen_pair_needs_both():
+    expr = parse("BIOMG 3300 or BIOMG 3330 or BIOMG 3310-BIOMG 3320.")
+    assert expr == AnyOf(
+        items=[*codes("BIOMG 3300", "BIOMG 3330"), all_of("BIOMG 3310", "BIOMG 3320")]
+    )
+
+
+def test_parse_alternative_lists_joined_by_or():
+    expr = parse("Prerequisite: BTRY 3010 and BTRY 3020, or BTRY 6010 and BTRY 6020.")
+    assert expr == AnyOf(items=[all_of("BTRY 3010", "BTRY 3020"), all_of("BTRY 6010", "BTRY 6020")])
+    expr = parse("BIOMG 3300, or BIOMG 3310 and BIOMG 3320, or BIOMG 3350 and BIOMG 2800.")
+    assert expr == AnyOf(
+        items=[
+            *codes("BIOMG 3300"),
+            all_of("BIOMG 3310", "BIOMG 3320"),
+            all_of("BIOMG 3350", "BIOMG 2800"),
+        ]
+    )
+    # one "and" alternative isn't enough to split: "A and B, or C, or D" keeps A required
+    expr = parse("AEM 2420 and AEM 2600, or ECON 3030, or ECON 3130.")
+    assert expr == AllOf(items=[*codes("AEM 2420"), any_of("AEM 2600", "ECON 3030", "ECON 3130")])
+
+
+def test_parse_trailing_recommended_is_advice():
+    assert (
+        parse("ANTHR 1300, 2310, or other background in evolutionary biology recommended.") is None
+    )
+    assert parse("one year of biology. PLSCI 2600 is recommended.") is None
+    assert parse("CS 2110. CS 3110 strongly recommended.") == CourseReq(code="CS 2110")
+
+
+def test_parse_sentences_and_corequisites():
+    expr = parse(
+        "CS 3110 or permission of instructor, and CS 3420 or CS 3410. Corequisite: CS 4121."
+    )
+    assert expr == AllOf(
+        items=[
+            *codes("CS 3110"),
+            any_of("CS 3420", "CS 3410"),
+            CourseReq(code="CS 4121", concurrent=True),
+        ]
+    )
+    assert parse("Prerequisite or corequisite: MATH 2940.") == CourseReq(
+        code="MATH 2940", concurrent=True
+    )
+    # different requirements for different students: either path will do
+    expr = parse(
+        "for Computer Science majors: CS 1133 and CS 2800. Prerequisites for others: CS 1133."
+    )
+    assert expr == AnyOf(items=[all_of("CS 1133", "CS 2800"), *codes("CS 1133")])
+
+
 def test_prereq_order(catalog):
     plan = [
         place("CS 1110", "FA24", status="completed"),
