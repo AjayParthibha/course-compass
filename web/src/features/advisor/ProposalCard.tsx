@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
-import { api, unwrap } from '../../api/client'
-import { keys, usePlan } from '../../api/hooks'
+import { usePlan } from '../../api/hooks'
 import type { Proposal } from '../../api/types'
 import { Button } from '../../ui'
+import { proposalQuery } from './proposalQuery'
 import { isOutdated, proposalCardState, type ProposalCardState } from './proposalState'
 
 const STATUS: Record<Exclude<ProposalCardState, 'ready'>, { label: string; note?: string }> = {
@@ -14,26 +14,14 @@ const STATUS: Record<Exclude<ProposalCardState, 'ready'>, { label: string; note?
     note: 'Your plan has changed since this was suggested, so it can’t be applied as-is.',
   },
   applied: { label: 'Applied' },
+  'applied-earlier': { label: 'Applied earlier', note: 'Your plan has changed since then.' },
   discarded: { label: 'Discarded' },
-}
-
-/** Reads the proposal from the shared cache, so applying or discarding it elsewhere updates the card. */
-function useCurrentProposal(initial: Proposal) {
-  const { data } = useQuery({
-    queryKey: keys.proposal(initial.id),
-    queryFn: () =>
-      unwrap(api.GET('/api/proposals/{proposal_id}', { params: { path: { proposal_id: initial.id } } })),
-    initialData: initial,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  })
-  return data
 }
 
 export default function ProposalCard({ initial, latestId }: { initial: Proposal; latestId: number | null }) {
   const [, setParams] = useSearchParams()
   const { data: plan } = usePlan()
-  const proposal = useCurrentProposal(initial)
+  const { data: proposal } = useQuery(proposalQuery(initial))
   const version = plan?.plan.version
   const state = proposalCardState(proposal, version, latestId)
   const preview = () =>
