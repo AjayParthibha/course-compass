@@ -21,7 +21,14 @@ export type Candidate = S['Candidate']
 export type Conversation = S['Conversation']
 export type ChatMessage = S['ChatMessage']
 
-export type PlanOp = S['AddOp-Input'] | S['RemoveOp-Input'] | S['MoveOp-Input'] | S['ReplaceOp-Input']
+export type PlanSettingsUpdate = S['PlanSettingsUpdate']
+
+export type PlanOp =
+  | S['AddOp-Input']
+  | S['RemoveOp-Input']
+  | S['MoveOp-Input']
+  | S['ReplaceOp-Input']
+  | S['LockOp-Input']
 
 export type AdvisorEvent =
   | S['TextEvent']

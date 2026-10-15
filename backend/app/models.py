@@ -45,6 +45,8 @@ class Student(Base):
     entering_term: Mapped[str | None]
     graduation_term: Mapped[str | None]
     max_credits: Mapped[int] = mapped_column(default=18)
+    # per-term overrides of max_credits, e.g. {"SP27": 15}
+    term_caps: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)
     memory_enabled: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(default=now)
 

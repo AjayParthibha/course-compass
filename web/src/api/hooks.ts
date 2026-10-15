@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, unwrap } from './client'
-import type { PlanOp, PlanState } from './types'
+import type { PlanOp, PlanSettingsUpdate, PlanState } from './types'
 
 export const keys = {
   me: ['me'] as const,
@@ -40,6 +40,34 @@ export function usePlanOps() {
   return useMutation({
     mutationFn: (ops: PlanOp[]) => unwrap(api.POST('/api/plan/ops', { body: { ops } })),
     onSuccess: (state) => qc.setQueryData(keys.plan, state),
+  })
+}
+
+/** "Keep in this term": a locked placement can't be moved until it's unlocked. */
+export function useLockPlacement() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ placementId, locked }: { placementId: string; locked: boolean }) =>
+      unwrap(
+        api.POST('/api/plan/ops', {
+          body: { ops: [{ op: 'lock', placement_id: placementId, locked }] },
+        }),
+      ),
+    onSuccess: (state) => qc.setQueryData(keys.plan, state),
+  })
+}
+
+/** Graduation term and credit caps. Rejects (409) if an earlier graduation would drop courses. */
+export function useUpdatePlanSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: PlanSettingsUpdate) => unwrap(api.PATCH('/api/plan/settings', { body })),
+    onSuccess: (student) => {
+      qc.setQueryData(keys.me, student)
+      qc.invalidateQueries({ queryKey: keys.me })
+      qc.invalidateQueries({ queryKey: keys.plan })
+      qc.invalidateQueries({ queryKey: keys.profile })
+    },
   })
 }
 

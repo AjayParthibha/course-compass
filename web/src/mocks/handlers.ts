@@ -1,5 +1,5 @@
 import { delay, http, HttpResponse } from 'msw'
-import type { AdvisorEvent, Placement, PlanOp, ProfileFact, Proposal } from '../api/types'
+import type { AdvisorEvent, Placement, PlanOp, PlanSettingsUpdate, ProfileFact, Proposal } from '../api/types'
 import * as fx from './fixtures'
 
 // In-memory state for mock mode. Resets on page reload.
@@ -17,6 +17,8 @@ function applyOps(ps: Placement[], ops: PlanOp[]): Placement[] {
   let out = ps.map((p) => ({ ...p }))
   for (const op of ops) {
     if (op.op === 'move') out = out.map((p) => (p.id === op.placement_id ? { ...p, term: op.term } : p))
+    if (op.op === 'lock')
+      out = out.map((p) => (p.id === op.placement_id ? { ...p, locked: op.locked ?? true } : p))
     if (op.op === 'remove') out = out.filter((p) => p.id !== op.placement_id)
     if (op.op === 'replace')
       out = out.map((p) =>
@@ -116,6 +118,21 @@ export const handlers = [
     if (body.dry_run) return HttpResponse.json(fx.planState(next))
     db.history.push(next)
     return HttpResponse.json(state())
+  }),
+  http.patch('/api/plan/settings', async ({ request }) => {
+    const body = (await request.json()) as PlanSettingsUpdate
+    const grad = body.graduation_term
+    if (grad && fx.TERMS.includes(grad)) {
+      const dropped = fx.TERMS.slice(fx.TERMS.indexOf(grad) + 1)
+      const stranded = current().filter((p) => dropped.includes(p.term))
+      if (stranded.length)
+        return HttpResponse.json(
+          { detail: `Graduating then would drop ${stranded.map((p) => p.course ?? p.slot_label).join(', ')}. Move or remove them first.` },
+          { status: 409 },
+        )
+    }
+    for (const [k, v] of Object.entries(body)) if (v != null) Object.assign(db.student, { [k]: v })
+    return HttpResponse.json(db.student)
   }),
   http.post('/api/plan/undo', () => {
     if (db.history.length > 1) db.history.pop()

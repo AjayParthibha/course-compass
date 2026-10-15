@@ -1,7 +1,7 @@
 import uuid
 
 from app.catalog.store import Catalog
-from app.schemas.plans import AddOp, MoveOp, Placement, PlanOp, RemoveOp, ReplaceOp
+from app.schemas.plans import AddOp, LockOp, MoveOp, Placement, PlanOp, RemoveOp, ReplaceOp
 
 
 class OpError(ValueError):
@@ -11,6 +11,11 @@ class OpError(ValueError):
 def next_term(term: str) -> str:
     season, year = term[:2], int(term[2:])
     return f"SP{year + 1:02d}" if season == "FA" else f"FA{year:02d}"
+
+
+def term_index(term: str) -> int:
+    """Sortable position of a term: SP26 < FA26 < SP27."""
+    return int(term[2:]) * 2 + (term[:2] == "FA")
 
 
 def terms_between(start: str, end: str) -> list[str]:
@@ -73,6 +78,11 @@ def apply_ops(
                 p = _find(by_id, op.placement_id)
                 if p.status == "completed":
                     raise OpError(f"{p.course} is already completed")
+                if p.locked and p.term != op.term:
+                    raise OpError(
+                        f"{p.course or p.slot_label or 'That slot'} is kept in "
+                        f"{term_label(p.term)}. Unlock it before moving it."
+                    )
                 p.term = op.term
                 p.origin = origin
             case ReplaceOp():
@@ -83,6 +93,8 @@ def apply_ops(
                 # slot stays set so the audit still knows what this course was meant to fill
                 p.course, p.title, p.credits = course.code, course.title, course.credits
                 p.origin = origin
+            case LockOp():
+                _find(by_id, op.placement_id).locked = op.locked
     return result
 
 
