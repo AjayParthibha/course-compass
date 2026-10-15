@@ -15,11 +15,14 @@ export function useChat() {
   useEffect(() => {
     const convo = history.data
     if (!convo || useAdvisor.getState().turns.length) return
+    // history carries each proposal's current status; seed the cache the cards read from
+    for (const m of convo.messages)
+      for (const e of m.events) if (e.type === 'proposal') qc.setQueryData(keys.proposal(e.proposal.id), e.proposal)
     useAdvisor.setState({
       conversationId: convo.id,
       turns: convo.messages.map((m) => ({ id: turnId(), role: m.role, events: m.events as AdvisorEvent[] })),
     })
-  }, [history.data])
+  }, [history.data, qc])
 
   const send = async (text: string) => {
     const { streaming, conversationId, turns } = useAdvisor.getState()

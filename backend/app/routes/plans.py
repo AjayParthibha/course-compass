@@ -39,7 +39,7 @@ def get_proposal(proposal_id: int, db: DB, student: CurrentStudent) -> Proposal:
     row = services.get_proposal(db, student, proposal_id)
     if row is None:
         raise HTTPException(404, "no such proposal")
-    return services.proposal_schema(row)
+    return services.proposal_schema(row, services.get_plan(db, student).version)
 
 
 @router.post("/proposals/{proposal_id}/preview")
@@ -48,7 +48,12 @@ def preview_proposal(proposal_id: int, db: DB, student: CurrentStudent) -> PlanS
     row = services.get_proposal(db, student, proposal_id)
     if row is None:
         raise HTTPException(404, "no such proposal")
-    return services.preview_ops(db, student, services.parse_ops.validate_python(row.ops), "advisor")
+    ops = services.parse_ops.validate_python(row.ops)
+    try:
+        return services.preview_ops(db, student, ops, "advisor")
+    except OpError:
+        # only happens once the plan has moved on and the ops no longer fit it
+        raise HTTPException(409, services.OUTDATED) from None
 
 
 @router.post("/proposals/{proposal_id}/apply")
@@ -70,4 +75,4 @@ def discard_proposal(proposal_id: int, db: DB, student: CurrentStudent) -> Propo
     if row.status == "pending":
         row.status = "discarded"
         db.commit()
-    return services.proposal_schema(row)
+    return services.proposal_schema(row, services.get_plan(db, student).version)

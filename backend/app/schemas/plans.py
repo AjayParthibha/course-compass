@@ -123,7 +123,9 @@ class RejectedOption(Schema):
     reason: str
 
 
-ProposalStatus = Literal["pending", "applied", "discarded", "stale"]
+# "outdated": still pending, but the plan has changed since it was made (version != base_version),
+# so it can't be applied as-is
+ProposalStatus = Literal["pending", "applied", "discarded", "outdated"]
 
 
 class Proposal(Schema):
