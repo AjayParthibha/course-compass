@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, unwrap } from './client'
 import type { PlanOp, PlanSettingsUpdate, PlanState } from './types'
 
@@ -125,6 +125,7 @@ export function useCandidates(slot: string, term: string, limit = 3) {
         }),
       ),
     enabled: !!slot && !!term,
+    placeholderData: keepPreviousData,
   })
 }
 
