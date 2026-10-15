@@ -1,5 +1,6 @@
 import { delay, http, HttpResponse } from 'msw'
 import type { AdvisorEvent, Placement, PlanOp, PlanSettingsUpdate, ProfileFact, Proposal } from '../api/types'
+import { CREDIT_MAX, CREDIT_MIN, nextTerm, termIndex, TERMS_AHEAD } from '../features/profile/settings'
 import * as fx from './fixtures'
 
 // In-memory state for mock mode. Resets on page reload.
@@ -8,10 +9,34 @@ const db = {
   proposals: new Map<number, Proposal>(),
   facts: [...fx.facts],
   student: { ...fx.student },
+  terms: fx.TERMS,
 }
 
+let nextFactId = Math.max(0, ...fx.facts.map((f) => f.id)) + 1
 const current = () => db.history[db.history.length - 1]
-const state = () => fx.planState(current(), db.history.length + 3)
+const state = () => fx.planState(current(), db.history.length + 3, db.terms)
+const error = (status: number, detail: string) => HttpResponse.json({ detail }, { status })
+
+function termsThrough(first: string, last: string) {
+  const out = [first]
+  while (termIndex(out[out.length - 1]) < termIndex(last)) out.push(nextTerm(out[out.length - 1]))
+  return out
+}
+
+/** The backend's checks for an edit, so mock mode fails the same way. */
+function opError(ps: Placement[], ops: PlanOp[]): string | null {
+  for (const op of ops) {
+    if (!('placement_id' in op)) continue
+    const p = ps.find((x) => x.id === op.placement_id)
+    if (!p) return `no placement ${op.placement_id}`
+    if (op.op === 'move' && p.status === 'completed') return `${p.course} is already completed`
+    if (op.op === 'move' && p.locked && p.term !== op.term)
+      return `${p.course ?? p.slot_label ?? 'That slot'} is kept in its term. Unlock it before moving it.`
+  }
+  return null
+}
+
+const validCredits = (n: unknown) => Number.isInteger(n) && (n as number) >= CREDIT_MIN && (n as number) <= CREDIT_MAX
 
 function applyOps(ps: Placement[], ops: PlanOp[]): Placement[] {
   let out = ps.map((p) => ({ ...p }))
@@ -114,24 +139,33 @@ export const handlers = [
   http.get('/api/plan', () => HttpResponse.json(state())),
   http.post('/api/plan/ops', async ({ request }) => {
     const body = (await request.json()) as { ops: PlanOp[]; dry_run?: boolean }
+    const problem = opError(current(), body.ops)
+    if (problem) return error(400, problem)
     const next = applyOps(current(), body.ops)
-    if (body.dry_run) return HttpResponse.json(fx.planState(next))
+    if (body.dry_run) return HttpResponse.json(fx.planState(next, 0, db.terms))
     db.history.push(next)
     return HttpResponse.json(state())
   }),
   http.patch('/api/plan/settings', async ({ request }) => {
     const body = (await request.json()) as PlanSettingsUpdate
-    const grad = body.graduation_term
-    if (grad && fx.TERMS.includes(grad)) {
-      const dropped = fx.TERMS.slice(fx.TERMS.indexOf(grad) + 1)
-      const stranded = current().filter((p) => dropped.includes(p.term))
-      if (stranded.length)
-        return HttpResponse.json(
-          { detail: `Graduating then would drop ${stranded.map((p) => p.course ?? p.slot_label).join(', ')}. Move or remove them first.` },
-          { status: 409 },
-        )
-    }
-    for (const [k, v] of Object.entries(body)) if (v != null) Object.assign(db.student, { [k]: v })
+    const caps = body.term_caps ?? null
+    if (body.max_credits != null && !validCredits(body.max_credits)) return error(422, 'max_credits out of range')
+    if (caps && !Object.values(caps).every(validCredits)) return error(422, 'term cap out of range')
+    const grad = body.graduation_term ?? db.student.graduation_term!
+    const ahead = termIndex(grad) - termIndex(fx.CURRENT)
+    if (grad !== db.student.graduation_term && (ahead < 0 || ahead > TERMS_AHEAD))
+      return error(400, 'graduation has to be between this term and 4 years from now')
+    const terms = termsThrough(db.student.entering_term!, grad)
+    const stranded = current().filter((p) => !terms.includes(p.term))
+    if (stranded.length)
+      return error(409, `Graduating then would drop ${stranded.map((p) => p.course ?? p.slot_label).join(', ')}. Move or remove them first.`)
+    const remaining = terms.filter((t) => termIndex(t) > termIndex(fx.CURRENT))
+    const bad = Object.keys(caps ?? {}).find((t) => !remaining.includes(t))
+    if (bad) return error(400, `${bad} isn't a remaining term in your plan`)
+    db.student.term_caps = caps ?? Object.fromEntries(Object.entries(db.student.term_caps).filter(([t]) => remaining.includes(t)))
+    db.student.graduation_term = grad
+    if (body.max_credits != null) db.student.max_credits = body.max_credits
+    db.terms = terms
     return HttpResponse.json(db.student)
   }),
   http.post('/api/plan/undo', () => {
@@ -151,12 +185,14 @@ export const handlers = [
   http.post('/api/proposals/:id/preview', ({ params }) => {
     const p = db.proposals.get(Number(params.id))
     if (!p) return HttpResponse.json({ detail: 'no such proposal' }, { status: 404 })
-    return HttpResponse.json(fx.planState(applyOps(current(), p.ops as PlanOp[])))
+    return HttpResponse.json(fx.planState(applyOps(current(), p.ops as PlanOp[]), 0, db.terms))
   }),
   http.post('/api/proposals/:id/apply', ({ params }) => {
     const p = db.proposals.get(Number(params.id))
     if (!p || p.status !== 'pending')
       return HttpResponse.json({ detail: 'proposal is not pending' }, { status: 409 })
+    const problem = opError(current(), p.ops as PlanOp[])
+    if (problem) return error(409, problem)
     db.history.push(applyOps(current(), p.ops as PlanOp[]))
     p.status = 'applied'
     return HttpResponse.json(state())
@@ -170,7 +206,11 @@ export const handlers = [
   http.get('/api/profile', () => HttpResponse.json({ student: db.student, facts: db.facts })),
   http.get('/api/profile/export', () => HttpResponse.json({ student: db.student, facts: db.facts })),
   http.patch('/api/profile/student', async ({ request }) => {
-    Object.assign(db.student, await request.json())
+    const body = (await request.json()) as Record<string, unknown>
+    // graduation and credit limits only change through /api/plan/settings
+    const misplaced = ['graduation_term', 'max_credits', 'term_caps'].find((k) => k in body)
+    if (misplaced) return error(422, `${misplaced} is set in plan settings`)
+    Object.assign(db.student, body)
     return HttpResponse.json(db.student)
   }),
   http.post('/api/profile/facts', async ({ request }) => {
@@ -178,7 +218,7 @@ export const handlers = [
     const fact = {
       ...db.facts[0],
       ...body,
-      id: Date.now(),
+      id: nextFactId++,
       status: body.status ?? 'stated',
     } as ProfileFact
     db.facts.push(fact)
@@ -215,7 +255,7 @@ export const handlers = [
     const code = params.code as string
     const fact = {
       ...db.facts[0],
-      id: Date.now(),
+      id: nextFactId++,
       dimension: 'not_interested',
       value: code,
       text: `Not interested in ${code}`,
