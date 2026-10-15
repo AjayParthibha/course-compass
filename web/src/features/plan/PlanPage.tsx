@@ -105,7 +105,10 @@ export default function PlanPage() {
 
   // the advisor's reasoning explains a proposal, so keep it in view while previewing one
   useEffect(() => {
-    if (proposalId) useAdvisor.getState().reveal()
+    if (!proposalId) return
+    // wide screens keep the advisor beside the preview; on narrow ones the drawer would cover it
+    useAdvisor.getState().reveal()
+    useAdvisor.getState().setSheetOpen(false)
   }, [proposalId])
 
   let content

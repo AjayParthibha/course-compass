@@ -4,6 +4,8 @@ import type { AdvisorEvent } from '../../api/types'
 export type Turn = { id: string; role: 'user' | 'assistant'; events: AdvisorEvent[] }
 
 const PREF_KEY = 'cc-advisor-open'
+/** from here up the advisor docks beside the plan instead of opening as a drawer */
+export const WIDE_QUERY = '(min-width: 1024px)'
 
 function readPref(): boolean | null {
   try {
@@ -62,5 +64,6 @@ export const useAdvisor = create<AdvisorState>((set) => ({
   setSheetOpen: (sheetOpen) => set({ sheetOpen }),
   setVisible: (visible) => set((s) => ({ visible, unread: visible ? false : s.unread })),
   reveal: () => set({ open: true }),
-  ask: (draft) => set({ draft, open: true, sheetOpen: true }),
+  // the drawer is only for narrow screens; opening it on a wide one would leave it to pop up later
+  ask: (draft) => set({ draft, open: true, sheetOpen: !window.matchMedia(WIDE_QUERY).matches }),
 }))

@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMediaQuery } from '../../ui/useMediaQuery'
 import AdvisorPanel from './AdvisorPanel'
-import { useAdvisor } from './store'
+import { useAdvisor, WIDE_QUERY } from './store'
 
-// Side panel from `lg`; it starts open where there's room for the graph beside it.
-const WIDE = '(min-width: 1024px)'
+// The side panel starts open where there's room for the graph beside it.
 const ROOMY = '(min-width: 1440px)'
 
 function ChatIcon() {
@@ -49,7 +48,7 @@ function AdvisorPill({ unread, onOpen, ref }: PillProps) {
 
 /** The advisor beside the plan: a docked panel on wide screens, a drawer from the right on narrow ones, and a small pill when collapsed. */
 export default function AdvisorDock() {
-  const wide = useMediaQuery(WIDE)
+  const wide = useMediaQuery(WIDE_QUERY)
   const roomy = useMediaQuery(ROOMY)
   // narrow selectors: the dock shouldn't re-render for every streamed word
   const open = useAdvisor((s) => s.open)
@@ -63,6 +62,11 @@ export default function AdvisorDock() {
   const [focusOnOpen, setFocusOnOpen] = useState(false)
 
   useEffect(() => setVisible(visible), [visible, setVisible])
+  // the drawer belongs to narrow screens and to this page; don't let it reappear after a resize or a return visit
+  useEffect(() => {
+    if (wide) setSheetOpen(false)
+  }, [wide, setSheetOpen])
+  useEffect(() => () => setSheetOpen(false), [setSheetOpen])
 
   const openByHand = (show: () => void) => {
     setFocusOnOpen(true)
@@ -91,7 +95,8 @@ export default function AdvisorDock() {
   )
 }
 
-const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
 
 function AdvisorSheet({ onClose: closeSheet, focusInput }: { onClose: () => void; focusInput: boolean }) {
   const dialog = useRef<HTMLElement>(null)
@@ -112,10 +117,13 @@ function AdvisorSheet({ onClose: closeSheet, focusInput }: { onClose: () => void
       if (!items.length) return
       const first = items[0]
       const last = items[items.length - 1]
-      if (e.shiftKey && document.activeElement === first) {
+      const active = document.activeElement as HTMLElement | null
+      // focus can sit on the drawer itself (or plain text in it), which isn't one of the items
+      const loose = !active || !items.includes(active)
+      if (e.shiftKey && (active === first || loose)) {
         e.preventDefault()
         last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
+      } else if (!e.shiftKey && (active === last || loose)) {
         e.preventDefault()
         first.focus()
       }
