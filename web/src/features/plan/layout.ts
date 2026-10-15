@@ -1,9 +1,9 @@
 import type { AuditResult, Placement, PlanEdge, RequirementStatus } from '../../api/types'
 
-export const NODE_W = 110
-export const NODE_H = 56
-export const COL_W = 122
-export const ROW_H = 66
+export const NODE_W = 128
+export const NODE_H = 66
+export const COL_W = 142
+export const ROW_H = 76
 export const LEFT = 16
 export const TOP = 52
 
@@ -39,6 +39,21 @@ export function layoutPlan(placements: Placement[], terms: string[], audit: Audi
     maxRows = Math.max(maxRows, inTerm.length)
   })
   return { positions, height: TOP + maxRows * ROW_H + 8, width: LEFT + terms.length * COL_W }
+}
+
+/** Total pannable width of the graph for `count` terms. */
+export function graphWidth(count: number) {
+  return LEFT + count * COL_W + 16
+}
+
+/**
+ * How far to pan right on first render so the current term sits near the left edge
+ * when the graph is wider than its container, without panning past the last term.
+ */
+export function initialScrollX(count: number, currentIndex: number, viewportWidth: number, peek = 24) {
+  const overflow = graphWidth(count) - viewportWidth
+  if (overflow <= 0 || currentIndex <= 0) return 0
+  return Math.max(0, Math.min(LEFT + currentIndex * COL_W - peek, overflow))
 }
 
 export function columnAt(x: number, count: number) {

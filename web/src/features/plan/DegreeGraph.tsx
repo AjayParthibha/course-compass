@@ -8,10 +8,11 @@ import {
   useNodesState,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useEffect, useMemo } from 'react'
+import './graph.css'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Placement, PlanState } from '../../api/types'
 import { termLabel } from '../../ui/terms'
-import { COL_W, LEFT, NODE_H, NODE_W, ROW_H, TOP, chain, columnAt, layoutPlan } from './layout'
+import { COL_W, LEFT, NODE_H, NODE_W, ROW_H, TOP, chain, columnAt, graphWidth, initialScrollX, layoutPlan } from './layout'
 
 type CourseData = {
   placement: Placement
@@ -32,6 +33,24 @@ const nodeStyles: Record<CourseData['state'], string> = {
   ghost: 'bg-transparent border-[1.5px] border-dashed border-accent',
 }
 
+const stateLabel: Record<CourseData['state'], string> = {
+  completed: 'completed',
+  in_progress: 'in progress',
+  planned: 'planned',
+  open: 'not chosen yet',
+  ghost: 'previous position',
+}
+
+function nodeLabel(p: Placement, state: CourseData['state'], problem: boolean) {
+  const parts = p.course
+    ? [p.course, p.title, termLabel(p.term, true), stateLabel[state]]
+    : ['Open slot', p.slot_label, termLabel(p.term, true), `${p.credits} credits`]
+  if (problem) parts.push('has a problem')
+  return parts.filter(Boolean).join(', ')
+}
+
+const a11yHelp = 'Press Enter or Space to see details. Planned courses can be moved from the details panel.'
+
 function CourseNode({ data }: NodeProps<Node<CourseData>>) {
   const { placement: p, state, selected, dim, moved, problem } = data
   const code = p.course ?? 'Open slot'
@@ -42,20 +61,20 @@ function CourseNode({ data }: NodeProps<Node<CourseData>>) {
   if (problem) cls += ' ring-2 ring-accent'
   return (
     <div
-      className={`box-border flex flex-col gap-0.5 rounded-[7px] px-2 py-1.5 ${cls} ${dim ? 'border-line-soft! [&>*]:opacity-35' : ''}`}
+      className={`box-border flex flex-col gap-0.5 overflow-hidden rounded-[7px] px-2 py-1.5 ${cls} ${dim ? 'border-line-soft! [&>*]:opacity-35' : ''}`}
       style={{ width: NODE_W, height: NODE_H }}
       title={`${code}${title ? ` · ${title}` : ''}`}
     >
       <Handle type="target" position={Position.Left} className="opacity-0!" isConnectable={false} />
-      <div className="flex flex-nowrap items-baseline justify-between gap-1">
+      <div className="flex flex-nowrap items-baseline justify-between gap-1 leading-[17px]">
         <span
-          className={`truncate font-mono text-[11.5px] font-semibold ${state === 'ghost' ? 'text-accent line-through' : state === 'open' ? 'text-[#5B6358]' : ''}`}
+          className={`shrink-0 font-mono text-[11.5px] font-semibold whitespace-nowrap ${state === 'ghost' ? 'text-accent line-through' : state === 'open' ? 'text-[#5B6358]' : ''}`}
         >
           {code}
         </span>
         <span className="shrink-0 font-mono text-[10px] text-muted">{state === 'ghost' ? 'was' : `${p.credits} cr`}</span>
       </div>
-      <span className="line-clamp-2 text-[11px] leading-[1.2] text-ink-soft">{title}</span>
+      <span className="line-clamp-2 text-[11px] leading-[14px] text-ink-soft">{title}</span>
       <Handle type="source" position={Position.Right} className="opacity-0!" isConnectable={false} />
     </div>
   )
@@ -97,7 +116,9 @@ export default function DegreeGraph({
   onMove,
 }: Props) {
   const { plan, audit, edges } = state
-  const { positions, height, width } = useMemo(
+  const wrap = useRef<HTMLDivElement>(null)
+  const [startX, setStartX] = useState<number | null>(null)
+  const { positions, height } = useMemo(
     () => layoutPlan(plan.placements, plan.terms, audit),
     [plan.placements, plan.terms, audit],
   )
@@ -118,6 +139,7 @@ export default function DegreeGraph({
       id: `term-${term}`,
       type: 'term',
       position: { x: LEFT + col * COL_W, y: 16 },
+      focusable: false,
       data: {
         label: termLabel(term),
         credits: plan.placements.filter((p) => p.term === term).reduce((n, p) => n + p.credits, 0),
@@ -142,6 +164,9 @@ export default function DegreeGraph({
         position: { x: pos.x, y: pos.y },
         data,
         draggable: !readOnly && p.status === 'planned',
+        ariaLabel: nodeLabel(p, data.state, data.problem),
+        ariaRole: onSelect ? 'button' : 'group',
+        domAttributes: { 'aria-roledescription': undefined },
       })
     }
     ghosts.forEach((g, i) => {
@@ -154,10 +179,11 @@ export default function DegreeGraph({
         data: { placement: g, state: 'ghost', selected: false, dim: false, moved: false, problem: false },
         draggable: false,
         selectable: false,
+        focusable: false,
       })
     })
     return nodes
-  }, [plan, positions, selected, focus, moved, ghosts, problems, readOnly])
+  }, [plan, positions, selected, focus, moved, ghosts, problems, readOnly, onSelect])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(builtNodes)
   useEffect(() => setNodes(builtNodes), [builtNodes, setNodes])
@@ -185,36 +211,65 @@ export default function DegreeGraph({
   )
 
   const graphHeight = Math.max(height + ghosts.length * ROW_H, 360)
+  const currentIndex = plan.terms.indexOf(plan.current_term)
+  const termCount = plan.terms.length
+
+  // React Flow only reads the viewport once, so measure before mounting it.
+  useLayoutEffect(() => {
+    if (startX == null && wrap.current) {
+      setStartX(initialScrollX(termCount, currentIndex, wrap.current.clientWidth))
+    }
+  }, [startX, termCount, currentIndex])
 
   return (
-    <div className="overflow-hidden" style={{ height: graphHeight }}>
-      <ReactFlow
-        nodes={nodes}
-        edges={flowEdges}
-        nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onNodeClick={(_, node) => node.type === 'course' && !node.id.startsWith('ghost-') && onSelect?.(node.id)}
-        onPaneClick={() => onSelect?.(null)}
-        onNodeDragStop={(_, node) => {
-          const placement = plan.placements.find((p) => p.id === node.id)
-          const term = plan.terms[columnAt(node.position.x, plan.terms.length)]
-          if (placement && term !== placement.term) onMove?.(placement, term)
-          else setNodes(builtNodes)
-        }}
-        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-        translateExtent={[
-          [0, 0],
-          [Math.max(width + 16, 600), graphHeight],
-        ]}
-        nodesConnectable={false}
-        zoomOnScroll={false}
-        zoomOnDoubleClick={false}
-        panOnScroll={false}
-        preventScrolling={false}
-        minZoom={0.5}
-        maxZoom={1.5}
-        proOptions={{ hideAttribution: true }}
-      />
+    <div ref={wrap} className="overflow-hidden" style={{ height: graphHeight }}>
+      {startX != null && (
+        <ReactFlow
+          className="degree-graph"
+          nodes={nodes}
+          edges={flowEdges}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onNodeClick={(_, node) => node.type === 'course' && !node.id.startsWith('ghost-') && onSelect?.(node.id)}
+          onPaneClick={() => onSelect?.(null)}
+          onKeyDown={(e) => {
+            const el = e.target as HTMLElement
+            const id = el.classList.contains('react-flow__node') ? el.dataset.id : undefined
+            if (!onSelect || !id || !plan.placements.some((p) => p.id === id)) return
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              onSelect(id)
+            } else if (e.key === 'Escape') {
+              onSelect(null)
+            }
+          }}
+          onNodeDragStop={(_, node) => {
+            const placement = plan.placements.find((p) => p.id === node.id)
+            const term = plan.terms[columnAt(node.position.x, plan.terms.length)]
+            if (placement && term !== placement.term) onMove?.(placement, term)
+            else setNodes(builtNodes)
+          }}
+          defaultViewport={{ x: -startX, y: 0, zoom: 1 }}
+          translateExtent={[
+            [0, 0],
+            [Math.max(graphWidth(termCount), 600), graphHeight],
+          ]}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          deleteKeyCode={null}
+          panActivationKeyCode={null}
+          ariaLabelConfig={{
+            'node.a11yDescription.default': a11yHelp,
+            'node.a11yDescription.keyboardDisabled': a11yHelp,
+          }}
+          zoomOnScroll={false}
+          zoomOnDoubleClick={false}
+          panOnScroll={false}
+          preventScrolling={false}
+          minZoom={0.5}
+          maxZoom={1.5}
+        />
+      )}
     </div>
   )
 }
