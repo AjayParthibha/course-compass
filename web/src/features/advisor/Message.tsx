@@ -1,6 +1,7 @@
 import { useSearchParams } from 'react-router'
 import type { AdvisorEvent } from '../../api/types'
 import { toBlocks } from './blocks'
+import MarkdownText from './MarkdownText'
 import { Button } from '../../ui'
 
 type Props = {
@@ -30,7 +31,7 @@ export default function Message({ role, events, live, canAnswer, onAnswer }: Pro
       <span className="text-[12px] font-semibold text-muted">Advisor</span>
       {blocks.length === 0 && live && <span className="text-[13px] text-muted">Thinking…</span>}
       {blocks.map((b, i) => {
-        if (b.kind === 'text') return <p key={i} className="m-0 leading-relaxed whitespace-pre-wrap">{b.text}</p>
+        if (b.kind === 'text') return <MarkdownText key={i} text={b.text} streaming={live && i === blocks.length - 1} />
         if (b.kind === 'tool')
           return (
             <div key={i} className="font-mono text-[11.5px] leading-snug text-muted">
