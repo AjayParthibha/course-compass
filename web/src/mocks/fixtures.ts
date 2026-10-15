@@ -159,6 +159,17 @@ export const student: Student = {
   onboarded: true,
 }
 
+const req = (code: string) => ({ kind: 'course' as const, code, concurrent: false })
+
+// The real roster rule, so mock mode shows a nested "one of" rule.
+const CS4820_PREREQS: Course['prereqs'] = {
+  kind: 'any',
+  items: [
+    { kind: 'all', items: [req('CS 2800'), req('CS 3110')] },
+    { kind: 'all', items: [{ kind: 'any', items: [req('CS 2110'), req('CS 2112')] }, req('CS 2800')] },
+  ],
+}
+
 export function courseDetail(code: string): Course {
   const row = ROWS.find((r) => r[0] === code)
   const [subject, number] = code.split(' ')
@@ -179,9 +190,11 @@ export function courseDetail(code: string): Course {
     prereq_text: prereqs.join(' and '),
     coreq_text: '',
     prereqs:
-      prereqs.length === 0
-        ? null
-        : { kind: 'all', items: prereqs.map((c) => ({ kind: 'course', code: c, concurrent: false })) },
+      code === 'CS 4820'
+        ? CS4820_PREREQS
+        : prereqs.length === 0
+          ? null
+          : { kind: 'all', items: prereqs.map((c) => ({ kind: 'course', code: c, concurrent: false })) },
     prereqs_reviewed: true,
   }
 }

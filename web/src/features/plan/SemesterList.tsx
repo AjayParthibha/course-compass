@@ -6,7 +6,7 @@ export default function SemesterList({ state }: { state: PlanState }) {
   const { selected, select } = usePlanUI()
   const { plan } = state
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3 p-4">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(250px,100%),1fr))] gap-3 p-3 sm:p-4">
       {plan.terms.map((term) => {
         const items = plan.placements.filter((p) => p.term === term)
         const credits = items.reduce((n, p) => n + p.credits, 0)
@@ -22,10 +22,12 @@ export default function SemesterList({ state }: { state: PlanState }) {
                   <button
                     type="button"
                     onClick={() => select(p.id)}
+                    aria-current={selected === p.id || undefined}
                     className={`flex w-full items-baseline gap-2 border-0 px-3 py-1.5 text-left ${selected === p.id ? 'bg-chip' : 'bg-transparent'}`}
                   >
-                    <span className="w-20 shrink-0 font-mono text-[12px] font-semibold">{p.course ?? 'Open'}</span>
-                    <span className="truncate text-[12.5px] text-ink-soft">{p.course ? p.title : p.slot_label}</span>
+                    <span className="w-[84px] shrink-0 font-mono text-[12px] font-semibold whitespace-nowrap">{p.course ?? 'Open slot'}</span>
+                    <span className="line-clamp-2 min-w-0 flex-1 text-[12.5px] leading-snug text-ink-soft">{p.course ? p.title : p.slot_label}</span>
+                    <span className="shrink-0 font-mono text-[11.5px] text-muted">{p.credits} cr</span>
                   </button>
                 </li>
               ))}

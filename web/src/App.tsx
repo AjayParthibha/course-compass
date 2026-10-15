@@ -8,6 +8,7 @@ import OnboardingPage from './features/onboarding/OnboardingPage'
 import PlanPage from './features/plan/PlanPage'
 import ProfilePage from './features/profile/ProfilePage'
 import Layout from './ui/Layout'
+import { PageLoading } from './ui/Loading'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1 } },
@@ -19,7 +20,7 @@ function RequireAuth() {
   const { data: me, isLoading, isError } = useMe(hasToken)
 
   if (!hasToken || isError) return <Navigate to="/login" replace state={{ from: location }} />
-  if (isLoading || !me) return <div className="p-10 text-muted">Loading…</div>
+  if (isLoading || !me) return <PageLoading />
   if (!me.onboarded && location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />
   return <Outlet />
 }
