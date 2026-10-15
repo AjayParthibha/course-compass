@@ -34,6 +34,16 @@ export function usePlanEdits() {
         onSuccess: () => notify(describeRemove(p)),
         onError,
       }),
+    lock: (p: Placement, locked: boolean) =>
+      ops.mutate([{ op: 'lock', placement_id: p.id, locked }], {
+        onSuccess: () =>
+          notify(
+            locked
+              ? `Keeping ${placementName(p)} in ${termLabel(p.term)}`
+              : `${placementName(p)} can move again`,
+          ),
+        onError,
+      }),
     undo: () =>
       undo.mutate(undefined, {
         onSuccess: () => notify('Change undone', false),
