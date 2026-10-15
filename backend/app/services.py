@@ -138,7 +138,16 @@ def undo(db: Session, st: models.Student) -> s.PlanState:
     return plan_state(db, st)
 
 
-def proposal_schema(row: models.Proposal) -> s.Proposal:
+OUTDATED = "This suggestion was made for an earlier version of your plan. Ask the advisor again."
+
+
+def proposal_status(row: models.Proposal, plan_version: int) -> str:
+    if row.status == "stale" or (row.status == "pending" and row.base_version != plan_version):
+        return "outdated"
+    return row.status
+
+
+def proposal_schema(row: models.Proposal, plan_version: int) -> s.Proposal:
     return s.Proposal(
         id=row.id,
         plan_id=row.plan_id,
@@ -146,7 +155,7 @@ def proposal_schema(row: models.Proposal) -> s.Proposal:
         summary=row.summary,
         ops=row.ops,
         violations=row.violations,
-        status=row.status,
+        status=proposal_status(row, plan_version),
         created_at=row.created_at,
         **row.details,
     )
@@ -182,7 +191,7 @@ def create_proposal(
     )
     db.add(row)
     db.commit()
-    return proposal_schema(row)
+    return proposal_schema(row, plan.version)
 
 
 def get_proposal(db: Session, st: models.Student, proposal_id: int) -> models.Proposal | None:
@@ -194,12 +203,11 @@ def get_proposal(db: Session, st: models.Student, proposal_id: int) -> models.Pr
 
 def apply_proposal(db: Session, st: models.Student, row: models.Proposal) -> s.PlanState:
     plan = get_plan(db, st)
-    if row.status != "pending":
-        raise Stale(f"proposal is {row.status}")
-    if row.base_version != plan.version:
-        row.status = "stale"
-        db.commit()
-        raise Stale("the plan changed since this proposal was made")
+    status = proposal_status(row, plan.version)
+    if status == "outdated":
+        raise Stale(OUTDATED)
+    if status != "pending":
+        raise Stale(f"This suggestion was already {status}.")
     state = apply_plan_ops(db, st, parse_ops.validate_python(row.ops), origin="advisor")
     row.status = "applied"
     db.commit()

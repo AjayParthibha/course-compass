@@ -978,7 +978,7 @@ export interface components {
              * @default pending
              * @enum {string}
              */
-            status: "pending" | "applied" | "discarded" | "stale";
+            status: "pending" | "applied" | "discarded" | "outdated";
             /**
              * Created At
              * Format: date-time
