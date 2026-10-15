@@ -86,7 +86,7 @@ function ConflictCard({ a, b }: { a: ProfileFact; b: ProfileFact }) {
 function FactRow({ fact }: { fact: ProfileFact }) {
   const { update, remove } = useProfileActions()
   const navigate = useNavigate()
-  const setDraft = useAdvisor((s) => s.setDraft)
+  const ask = useAdvisor((s) => s.ask)
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(fact.text)
   const tag =
@@ -128,7 +128,7 @@ function FactRow({ fact }: { fact: ProfileFact }) {
           <Button
             className="border-ink! font-semibold"
             onClick={() => {
-              setDraft(`Let's talk about this: ${fact.text.toLowerCase()}.`)
+              ask(`Let's talk about this: ${fact.text.toLowerCase()}.`)
               navigate('/plan')
             }}
           >

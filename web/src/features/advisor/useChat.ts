@@ -34,6 +34,7 @@ export function useChat() {
     const push = (event: AdvisorEvent) =>
       useAdvisor.setState((s) => ({
         turns: s.turns.map((t) => (t.id === reply.id ? { ...t, events: [...t.events, event] } : t)),
+        unread: s.visible ? s.unread : true,
       }))
 
     try {
@@ -43,7 +44,11 @@ export function useChat() {
           continue
         }
         push(event)
-        if (event.type === 'proposal') qc.setQueryData(keys.proposal(event.proposal.id), event.proposal)
+        if (event.type === 'proposal') {
+          qc.setQueryData(keys.proposal(event.proposal.id), event.proposal)
+          // a proposal needs the student's eyes; on wide screens bring the panel back
+          useAdvisor.getState().reveal()
+        }
         if (event.type === 'profile_update') qc.invalidateQueries({ queryKey: keys.profile })
       }
     } catch (err) {

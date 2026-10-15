@@ -95,7 +95,7 @@ export default function EditNotice() {
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed right-4 bottom-4 left-4 z-30 flex sm:right-auto sm:left-5"
+      className="pointer-events-none fixed right-4 bottom-20 left-4 z-30 flex sm:right-auto sm:left-5 lg:bottom-4"
     >
       {notice && <NoticeCard notice={notice} />}
     </div>
