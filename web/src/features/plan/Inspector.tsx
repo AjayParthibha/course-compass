@@ -151,7 +151,10 @@ export default function Inspector({ state }: { state: PlanState }) {
     return (
       <div className="flex flex-col gap-2 p-4 text-[13px] text-muted">
         {view === 'graph' ? (
-          <p className="m-0">Drag a course to move it. Every move is checked against your degree rules.</p>
+          <p className="m-0">
+            Drag a planned course to another term to move it (on a touch screen, press and hold it first), or select it
+            and use Move to another term. Every move is checked against your degree rules.
+          </p>
         ) : (
           <p className="m-0">Every move is checked against your degree rules.</p>
         )}
