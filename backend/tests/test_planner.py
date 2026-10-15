@@ -29,6 +29,52 @@ def test_parse_permission_is_a_flag():
     assert parse("Permission of instructor.") == Flag(text="Permission of instructor")
 
 
+def codes(*cs):
+    return [CourseReq(code=c) for c in cs]
+
+
+def test_parse_example_list_is_one_of():
+    # CS 4780's real text: each "(e.g. ...)" names options for one requirement
+    expr = parse(
+        "Prerequisite: CS 2800, probability theory (e.g. BTRY 3080, ECON 3130, MATH 4710, "
+        "ENGRD 2700) and linear algebra (e.g. MATH 2940), calculus (e.g. MATH 1920) and "
+        "programming proficiency (e.g. CS 2110)."
+    )
+    probability = AnyOf(items=codes("BTRY 3080", "ECON 3130", "MATH 4710", "ENGRD 2700"))
+    assert expr == AllOf(
+        items=[CourseReq(code="CS 2800"), probability, *codes("MATH 2940", "MATH 1920", "CS 2110")]
+    )
+
+
+def test_parse_oxford_comma_list_is_one_of():
+    expr = parse("CS 4670, CS 4700, CS 4740, or CS 4780.")
+    assert expr == AnyOf(items=codes("CS 4670", "CS 4700", "CS 4740", "CS 4780"))
+
+
+def test_parse_plain_commas_still_mean_and():
+    expr = parse("CS 2800, MATH 1910, MATH 2210 or MATH 2940.")
+    assert expr == AllOf(
+        items=[*codes("CS 2800", "MATH 1910"), AnyOf(items=codes("MATH 2210", "MATH 2940"))]
+    )
+
+
+def test_parse_semicolon_parts_are_and_until_or():
+    expr = parse("CS 2110; CS 3410; or permission of instructor.")
+    assert expr == AnyOf(
+        items=[AllOf(items=codes("CS 2110", "CS 3410")), Flag(text="permission of instructor")]
+    )
+
+
+def test_parse_slash_and_bare_numbers():
+    assert parse("CS 4320/5320.") == AnyOf(items=codes("CS 4320", "CS 5320"))
+    assert parse("PHYS 2218 and 2210.") == AllOf(items=codes("PHYS 2218", "PHYS 2210"))
+
+
+def test_parse_ignores_recommended():
+    assert parse("CS 2110. Recommended prerequisite: CS 3110.") == CourseReq(code="CS 2110")
+    assert parse("Recommended prerequisite: CS 3110.") is None
+
+
 def test_prereq_order(catalog):
     plan = [
         place("CS 1110", "FA24", status="completed"),
