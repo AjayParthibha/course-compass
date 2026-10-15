@@ -42,7 +42,7 @@ def candidates(
         raise HTTPException(400, f"{term} isn't in your plan")
 
     catalog = get_catalog()
-    eligible = list_eligible(req, term, plan.terms, plan.placements, catalog)
+    eligible = list_eligible(req, term, plan.placements, catalog)
     not_for_me: dict[str, int] = {}
     for fact in not_interested_facts(db, student):
         for code in catalog.equivalents(fact.value):

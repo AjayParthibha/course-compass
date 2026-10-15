@@ -29,6 +29,10 @@ class SettingsConflict(Exception):
     """A settings change would drop terms that still have courses in them."""
 
 
+class CannotUndo(Exception):
+    pass
+
+
 def student_schema(st: models.Student) -> Student:
     return Student(
         id=st.id,
@@ -60,12 +64,16 @@ def get_plan(db: Session, st: models.Student) -> models.Plan:
     return st.plans[0]
 
 
-def current_placements(db: Session, plan: models.Plan) -> list[s.Placement]:
-    row = db.scalar(
+def version_row(db: Session, plan: models.Plan, version: int) -> models.PlanVersion | None:
+    return db.scalar(
         select(models.PlanVersion).where(
-            models.PlanVersion.plan_id == plan.id, models.PlanVersion.version == plan.version
+            models.PlanVersion.plan_id == plan.id, models.PlanVersion.version == version
         )
     )
+
+
+def current_placements(db: Session, plan: models.Plan) -> list[s.Placement]:
+    row = version_row(db, plan, plan.version)
     return [s.Placement.model_validate(p) for p in row.placements] if row else []
 
 
@@ -103,12 +111,26 @@ def plan_state(db: Session, st: models.Student) -> s.PlanState:
     return evaluate(st, plan_schema(db, st, plan))
 
 
-def commit(db: Session, plan: models.Plan, placements: list[s.Placement], origin: str, note=None):
+HEAD = -1
+
+
+def commit(
+    db: Session,
+    plan: models.Plan,
+    placements: list[s.Placement],
+    origin: str,
+    note: str | None = None,
+    parent: int | None = HEAD,
+):
+    """Save placements as the plan's new version. `parent` defaults to the current one."""
+    if parent == HEAD:
+        parent = plan.version or None
     plan.version += 1
     db.add(
         models.PlanVersion(
             plan_id=plan.id,
             version=plan.version,
+            parent_version=parent,
             placements=[p.model_dump() for p in placements],
             origin=origin,
             note=note,
@@ -120,7 +142,7 @@ def commit(db: Session, plan: models.Plan, placements: list[s.Placement], origin
 def preview_ops(db: Session, st: models.Student, ops: list[s.PlanOp], origin="user") -> s.PlanState:
     plan = get_plan(db, st)
     current = plan_schema(db, st, plan)
-    new = apply_ops(current.placements, ops, get_catalog(), origin, slot_labels(st))
+    new = apply_ops(current.placements, ops, get_catalog(), current.terms, origin, slot_labels(st))
     return evaluate(st, current.model_copy(update={"placements": new}))
 
 
@@ -133,15 +155,26 @@ def apply_plan_ops(
 
 
 def undo(db: Session, st: models.Student) -> s.PlanState:
+    """Step back one edit. The undo is saved as a new version pointing at the parent of
+    the version it undid, so undoing again keeps walking back through history."""
     plan = get_plan(db, st)
-    if plan.version <= 1:
+    head = version_row(db, plan, plan.version)
+    # a graduation change keeps the placements as they were; undo the edit before it
+    while head and head.origin == "settings" and head.parent_version:
+        head = version_row(db, plan, head.parent_version)
+    target = version_row(db, plan, head.parent_version) if head and head.parent_version else None
+    if target is None:
         return plan_state(db, st)
-    prev = db.scalar(
-        select(models.PlanVersion).where(
-            models.PlanVersion.plan_id == plan.id, models.PlanVersion.version == plan.version - 1
+    placements = [s.Placement.model_validate(p) for p in target.placements]
+    terms = terms_between(st.entering_term, st.graduation_term)
+    outside = sorted({p.term for p in placements if p.term not in terms}, key=term_index)
+    if outside:
+        raise CannotUndo(
+            f"Can't undo: before that edit your plan had courses or slots in "
+            f"{', '.join(map(term_label, outside))}, which is no longer part of your plan. "
+            "Change your graduation term back first."
         )
-    )
-    commit(db, plan, [s.Placement.model_validate(p) for p in prev.placements], "user", "undo")
+    commit(db, plan, placements, "user", "undo", parent=target.parent_version)
     return plan_state(db, st)
 
 
@@ -211,9 +244,14 @@ def update_plan_settings(
         st.term_caps = dict(term_caps)
     else:
         st.term_caps = {t: c for t, c in (st.term_caps or {}).items() if t in terms}
-    st.graduation_term = grad
     if max_credits is not None:
         st.max_credits = max_credits
+    if grad != st.graduation_term:
+        st.graduation_term = grad
+        # a new version, so proposals made for the old terms show as outdated
+        for plan in st.plans:
+            placements = current_placements(db, plan)
+            commit(db, plan, placements, "settings", f"Changed graduation to {term_label(grad)}")
     db.commit()
 
 

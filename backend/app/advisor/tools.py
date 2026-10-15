@@ -118,7 +118,9 @@ def list_eligible(ctx: ToolContext, requirement_id: str, term: str, limit: int =
     if req is None:
         return ToolResult(None, f"no requirement {requirement_id}")
     plan = services.plan_schema(ctx.db, st, services.get_plan(ctx.db, st))
-    courses = _list_eligible(req, term, plan.terms, plan.placements, get_catalog())
+    if term not in plan.terms:
+        return ToolResult(None, f"{term} isn't one of the plan's terms ({', '.join(plan.terms)})")
+    courses = _list_eligible(req, term, plan.placements, get_catalog())
     data = {
         "count": len(courses),
         "courses": [

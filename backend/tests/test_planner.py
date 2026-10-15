@@ -3,11 +3,12 @@ import pytest
 from app.catalog.prereq_parse import parse
 from app.catalog.store import Catalog
 from app.planner.audit import audit, matches_filter
+from app.planner.eligible import list_eligible
 from app.planner.ops import OpError, apply_ops
 from app.planner.validate import validate
 from app.requirements.loader import get_program
 from app.schemas.courses import AllOf, AnyOf, CourseReq, Flag
-from app.schemas.plans import LockOp, MoveOp, Placement
+from app.schemas.plans import AddOp, LockOp, MoveOp, Placement
 from app.schemas.requirements import CourseFilter
 
 TERMS = ["FA24", "SP25", "FA25", "SP26", "FA26", "SP27"]
@@ -165,18 +166,18 @@ def test_title_prefix_filter(catalog):
 
 def test_move_op(catalog):
     plan = [place("CS 4740", "FA26", pid="a")]
-    moved = apply_ops(plan, [MoveOp(placement_id="a", term="SP27")], catalog)
+    moved = apply_ops(plan, [MoveOp(placement_id="a", term="SP27")], catalog, TERMS)
     assert moved[0].term == "SP27" and plan[0].term == "FA26"
 
 
 def test_locked_placement_cannot_move(catalog):
     plan = [place("CS 4740", "FA26", pid="a")]
-    locked = apply_ops(plan, [LockOp(placement_id="a")], catalog)
+    locked = apply_ops(plan, [LockOp(placement_id="a")], catalog, TERMS)
     assert locked[0].locked and not plan[0].locked
     with pytest.raises(OpError, match="kept in Fall ’26"):
-        apply_ops(locked, [MoveOp(placement_id="a", term="SP27")], catalog)
+        apply_ops(locked, [MoveOp(placement_id="a", term="SP27")], catalog, TERMS)
     unlock = LockOp(placement_id="a", locked=False)
-    moved = apply_ops(locked, [unlock, MoveOp(placement_id="a", term="SP27")], catalog)
+    moved = apply_ops(locked, [unlock, MoveOp(placement_id="a", term="SP27")], catalog, TERMS)
     assert moved[0].term == "SP27"
 
 
@@ -186,3 +187,18 @@ def test_term_cap_overrides_default(catalog):
     capped = validate(plan, TERMS, catalog, term_caps={"FA26": 15})
     high = [v.message for v in capped if v.kind == "credits_high"]
     assert high == ["Fall ’26 has 16 credits, over your 15-credit cap for that term"]
+
+
+def test_ops_stay_inside_plan_terms(catalog):
+    plan = [place("CS 4740", "FA26", pid="a")]
+    with pytest.raises(OpError, match="Fall ’27 isn't in your plan"):
+        apply_ops(plan, [MoveOp(placement_id="a", term="FA27")], catalog, TERMS)
+    with pytest.raises(OpError, match="isn't in your plan"):
+        apply_ops(plan, [AddOp(term="SP28", course="CS 3110")], catalog, TERMS)
+
+
+def test_eligible_tolerates_placements_outside_terms(catalog):
+    program = get_program("cs-eng", "2024-25")
+    ls = next(r for r in program.all_requirements() if r.id == "ls")
+    plan = [place("CS 1110", "FA24", status="completed"), place("CS 4740", "SP29")]
+    assert list_eligible(ls, "SP27", plan, catalog)

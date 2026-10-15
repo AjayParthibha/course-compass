@@ -278,3 +278,96 @@ def test_lock_placement(client, auth):
     undone = client.post("/api/plan/undo", headers=auth).json()["plan"]["placements"]
     p = next(p for p in undone if p["id"] == slot["id"])
     assert p["term"] == "SP27" and p["locked"]
+
+
+def ops(client, auth, *edits):
+    res = client.post("/api/plan/ops", json={"ops": list(edits)}, headers=auth)
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def terms_by_id(state):
+    return {p["id"]: p["term"] for p in state["plan"]["placements"]}
+
+
+def test_undo_walks_back_through_history(client, auth):
+    start = onboard(client, auth).json()
+    a, b = [p for p in start["plan"]["placements"] if p["term"] == "SP27"][:2]
+    ops(client, auth, {"op": "move", "placement_id": a["id"], "term": "FA27"})
+    ops(client, auth, {"op": "move", "placement_id": b["id"], "term": "SP28"})
+
+    once = client.post("/api/plan/undo", headers=auth).json()
+    assert terms_by_id(once)[a["id"]] == "FA27" and terms_by_id(once)[b["id"]] == "SP27"
+    twice = client.post("/api/plan/undo", headers=auth).json()
+    assert terms_by_id(twice) == terms_by_id(start)
+    # nothing left to undo
+    again = client.post("/api/plan/undo", headers=auth).json()
+    assert terms_by_id(again) == terms_by_id(start)
+    assert again["plan"]["version"] == twice["plan"]["version"]
+
+    # an edit after undoing starts a new branch of history
+    ops(client, auth, {"op": "move", "placement_id": b["id"], "term": "FA27"})
+    back = client.post("/api/plan/undo", headers=auth).json()
+    assert terms_by_id(back) == terms_by_id(start)
+
+
+def empty_spring_28(client, auth):
+    state = onboard(client, auth).json()
+    sp28 = [p for p in state["plan"]["placements"] if p["term"] == "SP28"]
+    return ops(
+        client, auth, *[{"op": "move", "placement_id": p["id"], "term": "FA27"} for p in sp28]
+    )
+
+
+def set_graduation(client, auth, term):
+    return client.patch("/api/plan/settings", json={"graduation_term": term}, headers=auth)
+
+
+def test_graduation_change_is_a_new_version(client, auth):
+    before = empty_spring_28(client, auth)["plan"]
+    proposal_id = propose(auth, "Add CS 4780", [{"op": "add", "term": "FA27", "course": "CS 4780"}])
+
+    assert set_graduation(client, auth, "FA27").status_code == 200
+    after = client.get("/api/plan", headers=auth).json()["plan"]
+    assert after["version"] == before["version"] + 1
+    assert after["placements"] == before["placements"]
+    assert client.get(f"/api/proposals/{proposal_id}", headers=auth).json()["status"] == "outdated"
+    assert client.post(f"/api/proposals/{proposal_id}/apply", headers=auth).status_code == 409
+
+
+def test_undo_refuses_versions_outside_the_plan_terms(client, auth):
+    empty_spring_28(client, auth)
+    assert set_graduation(client, auth, "FA27").status_code == 200
+
+    # undo skips the graduation change and would bring back Spring ’28 placements
+    res = client.post("/api/plan/undo", headers=auth)
+    assert res.status_code == 409 and "Spring ’28" in res.json()["detail"]
+    state = client.get("/api/plan", headers=auth).json()
+    assert all(p["term"] in state["plan"]["terms"] for p in state["plan"]["placements"])
+
+    slot = next(p for p in state["plan"]["placements"] if p["slot"] and not p["course"])
+    url = f"/api/slots/{slot['slot']}/candidates"
+    assert client.get(url, params={"term": "FA27"}, headers=auth).status_code == 200
+
+    # with Spring ’28 back in the plan, the undo goes through
+    assert set_graduation(client, auth, "SP28").status_code == 200
+    res = client.post("/api/plan/undo", headers=auth)
+    assert res.status_code == 200
+    assert any(p["term"] == "SP28" for p in res.json()["plan"]["placements"])
+
+
+def test_ops_outside_plan_terms_are_rejected(client, auth):
+    onboard(client, auth)
+    add = {"op": "add", "term": "SP29", "course": "CS 3110"}
+    res = client.post("/api/plan/ops", json={"ops": [add]}, headers=auth)
+    assert res.status_code == 400 and "Spring ’29 isn't in your plan" in res.json()["detail"]
+
+
+def test_preview_of_outdated_proposal_is_409(client, auth):
+    onboard(client, auth)
+    proposal_id = propose(auth, "Add CS 3110", [{"op": "add", "term": "FA26", "course": "CS 3110"}])
+    assert client.post(f"/api/proposals/{proposal_id}/preview", headers=auth).status_code == 200
+    ops(client, auth, {"op": "add", "term": "SP27", "course": "CS 4820"})
+    res = client.post(f"/api/proposals/{proposal_id}/preview", headers=auth)
+    assert res.status_code == 409 and "earlier version of your plan" in res.json()["detail"]
+    assert client.post(f"/api/proposals/{proposal_id}/apply", headers=auth).status_code == 409

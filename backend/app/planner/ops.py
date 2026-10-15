@@ -1,3 +1,4 @@
+import re
 import uuid
 
 from app.catalog.store import Catalog
@@ -40,16 +41,27 @@ def apply_ops(
     placements: list[Placement],
     ops: list[PlanOp],
     catalog: Catalog,
+    terms: list[str],
     origin: str = "user",
     slot_labels: dict[str, str] | None = None,
 ) -> list[Placement]:
-    """Return a new placement list with the ops applied. Raises OpError on bad ops."""
+    """Return a new placement list with the ops applied. Raises OpError on bad ops.
+    `terms` are the plan's terms; adds and moves have to land in one of them."""
     result = [p.model_copy() for p in placements]
     by_id = {p.id: p for p in result}
+
+    def check_term(term: str) -> None:
+        if term not in terms:
+            label = term_label(term) if re.fullmatch(r"(FA|SP)\d{2}", term) else repr(term)
+            raise OpError(
+                f"{label} isn't in your plan, which runs "
+                f"{term_label(terms[0])} to {term_label(terms[-1])}"
+            )
 
     for op in ops:
         match op:
             case AddOp():
+                check_term(op.term)
                 if bool(op.course) == bool(op.slot):
                     raise OpError("add needs exactly one of course or slot")
                 credits = 3
@@ -83,6 +95,7 @@ def apply_ops(
                         f"{p.course or p.slot_label or 'That slot'} is kept in "
                         f"{term_label(p.term)}. Unlock it before moving it."
                     )
+                check_term(op.term)
                 p.term = op.term
                 p.origin = origin
             case ReplaceOp():

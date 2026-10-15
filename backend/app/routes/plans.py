@@ -49,7 +49,15 @@ def update_settings(body: PlanSettingsUpdate, db: DB, student: CurrentStudent) -
 
 @router.post("/plan/undo")
 def undo(db: DB, student: CurrentStudent) -> PlanState:
-    return services.undo(db, student)
+    """Step back one edit. Repeating it keeps going back through the plan's history.
+
+    Fails with 409 when the earlier plan used terms that are no longer in the plan."""
+    try:
+        return services.undo(db, student)
+    except services.CannotUndo as e:
+        raise HTTPException(409, str(e)) from None
+    except services.NotReady:
+        raise HTTPException(409, "finish onboarding first") from None
 
 
 @router.get("/proposals/{proposal_id}")
@@ -66,6 +74,8 @@ def preview_proposal(proposal_id: int, db: DB, student: CurrentStudent) -> PlanS
     row = services.get_proposal(db, student, proposal_id)
     if row is None:
         raise HTTPException(404, "no such proposal")
+    if services.proposal_status(row, services.get_plan(db, student).version) == "outdated":
+        raise HTTPException(409, services.OUTDATED)
     ops = services.parse_ops.validate_python(row.ops)
     try:
         return services.preview_ops(db, student, ops, "advisor")

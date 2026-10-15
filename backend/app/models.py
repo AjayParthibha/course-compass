@@ -75,6 +75,10 @@ class PlanVersion(Base):
     plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id"), index=True)
     version: Mapped[int]
     placements: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    # the version this one was derived from; undo steps back along these links, so an
+    # undo commit points at the parent of the version it undid
+    parent_version: Mapped[int | None]
+    # "settings" for versions that only record a graduation change
     origin: Mapped[str] = mapped_column(default="user")
     note: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(default=now)
