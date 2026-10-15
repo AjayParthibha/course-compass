@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import { useCourse } from '../../api/hooks'
 import type { Placement, PlanState } from '../../api/types'
 import { Button, SectionLabel } from '../../ui'
+import { cureviewsUrl } from '../../ui/links'
 import { termLabel } from '../../ui/terms'
 import { useAdvisor } from '../advisor/store'
 import { usePlanEdits } from './edits'
@@ -10,7 +11,6 @@ import { usePlanUI } from './store'
 
 const statusText = { completed: 'Done', in_progress: 'Taking now', planned: 'Planned' }
 
-const cureviewsUrl = (code: string) => `https://www.cureviews.org/course/${code.trim().split(/\s+/).map(encodeURIComponent).join('/')}`
 
 function requirementFor(state: PlanState, id: string) {
   for (const r of state.audit.requirements) {
@@ -229,7 +229,7 @@ export default function Inspector({ state }: { state: PlanState }) {
             href={cureviewsUrl(placement.course)}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label={`Read ${placement.course} reviews on CUReviews (opens in a new tab)`}
+            aria-label={`Read reviews on CUReviews for ${placement.course} (opens in a new tab)`}
             className="self-start font-semibold text-ink underline underline-offset-3"
           >
             Read reviews on CUReviews
