@@ -23,7 +23,7 @@ def list_eligible(
             continue
         in_plan |= catalog.equivalents(p.course)
         if p.status == "completed" or terms.index(p.term) < idx:
-            before |= catalog.equivalents(p.course)
+            before |= catalog.prereq_credit(p.course)
 
     out = []
     seen: set[str] = set()

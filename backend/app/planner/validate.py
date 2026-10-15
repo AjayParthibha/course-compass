@@ -55,17 +55,18 @@ def prereq_edges(placements: list[Placement], catalog: Catalog) -> list[tuple[st
     courses = [p for p in placements if p.course]
     for p in courses:
         course = catalog.get(p.course)
-        needs = _expand(prereq_codes(course.prereqs), catalog) if course else set()
+        needs = prereq_codes(course.prereqs) if course else set()
         for q in courses:
-            if q is not p and q.course in needs:
+            if q is not p and catalog.prereq_credit(q.course) & needs:
                 edges.append((q.id, p.id))
     return edges
 
 
 def _expand(codes: set[str], catalog: Catalog) -> set[str]:
+    """Everything these courses count as when checking prerequisites."""
     out = set()
     for code in codes:
-        out |= catalog.equivalents(code)
+        out |= catalog.prereq_credit(code)
     return out
 
 

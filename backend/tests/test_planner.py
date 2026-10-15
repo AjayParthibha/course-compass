@@ -1,4 +1,5 @@
 from app.catalog.prereq_parse import parse
+from app.catalog.store import Catalog
 from app.planner.audit import audit
 from app.planner.ops import apply_ops
 from app.planner.validate import validate
@@ -86,6 +87,27 @@ def test_prereq_order(catalog):
     bad = plan + [place("CS 3110", "SP25"), place("CS 2800", "FA25")]
     errors = [v for v in validate(bad, TERMS, catalog) if v.kind == "prereq"]
     assert len(errors) == 1 and "CS 2800" in errors[0].message
+
+
+def test_prereq_equivalents(catalog):
+    # CS 2800 asks for "MATH 1110 or equivalent"; Engineering students take MATH 1910
+    cs2800 = catalog.get("CS 2800").model_copy(
+        update={"prereqs": AllOf(items=[CourseReq(code="MATH 1110"), CourseReq(code="CS 1110")])}
+    )
+    courses = [c for c in catalog.courses.values() if c.code != "CS 2800"] + [cs2800]
+    plan = [
+        place("MATH 1910", "FA24", status="completed"),
+        place("CS 1110", "FA24", status="completed"),
+        place("CS 2800", "SP25"),
+    ]
+    strict = Catalog(courses)
+    assert [v for v in validate(plan, TERMS, strict) if v.kind == "prereq"]
+
+    lenient = Catalog(courses, {"MATH 1910": ["MATH 1110"]})
+    assert not [v for v in validate(plan, TERMS, lenient) if v.kind == "prereq"]
+    # one-directional, and degree requirements / duplicate checks don't see it
+    assert "MATH 1910" not in lenient.prereq_credit("MATH 1110")
+    assert lenient.equivalents("MATH 1910") == {"MATH 1910"}
 
 
 def test_credit_cap(catalog):

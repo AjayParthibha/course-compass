@@ -1,0 +1,16 @@
+# DRAFT, not verified. Courses that satisfy a prerequisite naming another course,
+# for roster text like "MATH 1110 or equivalent". One-directional: the key covers
+# the listed courses, not the other way round (MATH 1910 covers a MATH 1110
+# prerequisite; MATH 1110 does not cover MATH 1910).
+#
+# Used only when checking prerequisites. Degree requirements and duplicate
+# detection ignore this file, so it can't make one course count twice.
+
+# Engineering math sequence vs. the A&S sequence
+MATH 1910: [MATH 1110, MATH 1120]
+MATH 1920: [MATH 2220]
+MATH 2940: [MATH 2210]
+
+# Intro programming: Python and MATLAB versions are listed side by side in most prereqs
+CS 1110: [CS 1112]
+CS 1112: [CS 1110]
