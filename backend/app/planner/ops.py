@@ -46,7 +46,9 @@ def apply_ops(
     slot_labels: dict[str, str] | None = None,
 ) -> list[Placement]:
     """Return a new placement list with the ops applied. Raises OpError on bad ops.
-    `terms` are the plan's terms; adds and moves have to land in one of them."""
+    `terms` are the plan's terms; adds and moves have to land in one of them.
+    The advisor can't touch placements the student locked; the student can still
+    remove or replace them, just not move them."""
     result = [p.model_copy() for p in placements]
     by_id = {p.id: p for p in result}
 
@@ -56,6 +58,13 @@ def apply_ops(
             raise OpError(
                 f"{label} isn't in your plan, which runs "
                 f"{term_label(terms[0])} to {term_label(terms[-1])}"
+            )
+
+    def check_lock(p: Placement) -> None:
+        if origin == "advisor" and p.locked:
+            raise OpError(
+                f"{_name(p)} is locked in {term_label(p.term)} by the student. "
+                "Leave it there, or ask them to unlock it."
             )
 
     for op in ops:
@@ -84,22 +93,27 @@ def apply_ops(
                 by_id[p.id] = p
             case RemoveOp():
                 p = _find(by_id, op.placement_id)
+                check_lock(p)
                 result.remove(p)
                 del by_id[p.id]
             case MoveOp():
                 p = _find(by_id, op.placement_id)
                 if p.status == "completed":
                     raise OpError(f"{p.course} is already completed")
+                check_lock(p)
                 if p.locked and p.term != op.term:
                     raise OpError(
-                        f"{p.course or p.slot_label or 'That slot'} is kept in "
-                        f"{term_label(p.term)}. Unlock it before moving it."
+                        f"{_name(p)} is kept in {term_label(p.term)}. Unlock it before moving it."
                     )
                 check_term(op.term)
                 p.term = op.term
                 p.origin = origin
             case ReplaceOp():
                 p = _find(by_id, op.placement_id)
+                if p.status != "planned":
+                    taken = "already completed" if p.status == "completed" else "in progress"
+                    raise OpError(f"{p.course} is {taken}, so it can't be swapped for another")
+                check_lock(p)
                 course = catalog.get(op.course)
                 if course is None:
                     raise OpError(f"unknown course {op.course}")
@@ -107,8 +121,14 @@ def apply_ops(
                 p.course, p.title, p.credits = course.code, course.title, course.credits
                 p.origin = origin
             case LockOp():
+                if origin == "advisor":
+                    raise OpError("Only the student can lock or unlock a placement")
                 _find(by_id, op.placement_id).locked = op.locked
     return result
+
+
+def _name(p: Placement) -> str:
+    return p.course or p.slot_label or "That slot"
 
 
 def _find(by_id: dict[str, Placement], placement_id: str) -> Placement:

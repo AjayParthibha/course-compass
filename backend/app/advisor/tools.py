@@ -18,7 +18,7 @@ from app.catalog.store import get_catalog
 from app.models import now
 from app.planner.eligible import list_eligible as _list_eligible
 from app.schemas.advisor import ProfileUpdateEvent, ProposalEvent, QuestionEvent
-from app.schemas.plans import PlanOp, ProposedChange, RejectedOption
+from app.schemas.plans import AdvisorOp, ProposedChange, RejectedOption
 
 
 @dataclass
@@ -179,14 +179,16 @@ def update_profile(
 def propose_changes(
     ctx: ToolContext,
     summary: str,
-    ops: list[PlanOp],
+    ops: list[AdvisorOp],
     changes: list[ProposedChange],
     rejected: list[RejectedOption] = [],  # noqa: B006
 ) -> ToolResult:
     """Propose plan edits for the student to review. Nothing changes until they
     click Apply. `ops` are the edits; `changes` explain each moved/added course in
     plain words; `rejected` lists options you considered and why you didn't pick
-    them. The planner re-checks the result and reports any violations back."""
+    them. The planner re-checks the result and reports any violations back.
+    Placements with `locked: true` are kept in their term by the student: don't
+    move, remove or replace them."""
     proposal = services.create_proposal(ctx.db, ctx.student, ops, summary, changes, rejected)
     ctx.events.append(ProposalEvent(proposal=proposal))
     blocking = [v.message for v in proposal.violations if v.blocking]

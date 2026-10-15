@@ -1,3 +1,9 @@
+import json
+
+import pytest
+
+from app.planner.ops import OpError
+
 HISTORY = """FA24 CS 1110 / MATH 1910
 SP25 CS 2110, CS 2800
 FA25 ECON 1110 (4cr)
@@ -371,3 +377,20 @@ def test_preview_of_outdated_proposal_is_409(client, auth):
     res = client.post(f"/api/proposals/{proposal_id}/preview", headers=auth)
     assert res.status_code == 409 and "earlier version of your plan" in res.json()["detail"]
     assert client.post(f"/api/proposals/{proposal_id}/apply", headers=auth).status_code == 409
+
+
+def test_advisor_cannot_lock_or_touch_locked(client, auth):
+    import pydantic
+
+    from app.advisor.tools import REGISTRY
+
+    state = onboard(client, auth).json()
+    ops_schema = json.dumps(REGISTRY["propose_changes"].schema()["parameters"]["properties"]["ops"])
+    assert '"remove"' in ops_schema and '"lock"' not in ops_schema
+    slot = next(p for p in state["plan"]["placements"] if p["term"] == "SP27")
+    with pytest.raises(pydantic.ValidationError):
+        propose(auth, "Unlock", [{"op": "lock", "placement_id": slot["id"], "locked": False}])
+
+    ops(client, auth, {"op": "lock", "placement_id": slot["id"]})
+    with pytest.raises(OpError, match="locked in Spring ’27 by the student"):
+        propose(auth, "Drop it", [{"op": "remove", "placement_id": slot["id"]}])

@@ -69,6 +69,8 @@ class LockOp(Schema):
 
 
 PlanOp = Annotated[AddOp | RemoveOp | MoveOp | ReplaceOp | LockOp, Field(discriminator="op")]
+# what the advisor may propose: locking stays with the student
+AdvisorOp = Annotated[AddOp | RemoveOp | MoveOp | ReplaceOp, Field(discriminator="op")]
 
 ViolationKind = Literal[
     "prereq", "coreq", "credits_high", "credits_low", "offering", "duplicate", "unknown_course"

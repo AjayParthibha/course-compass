@@ -8,7 +8,7 @@ from app.planner.ops import OpError, apply_ops
 from app.planner.validate import validate
 from app.requirements.loader import get_program
 from app.schemas.courses import AllOf, AnyOf, CourseReq, Flag
-from app.schemas.plans import AddOp, LockOp, MoveOp, Placement
+from app.schemas.plans import AddOp, LockOp, MoveOp, Placement, RemoveOp, ReplaceOp
 from app.schemas.requirements import CourseFilter
 
 TERMS = ["FA24", "SP25", "FA25", "SP26", "FA26", "SP27"]
@@ -202,3 +202,33 @@ def test_eligible_tolerates_placements_outside_terms(catalog):
     ls = next(r for r in program.all_requirements() if r.id == "ls")
     plan = [place("CS 1110", "FA24", status="completed"), place("CS 4740", "SP29")]
     assert list_eligible(ls, "SP27", plan, catalog)
+
+
+def test_replace_only_planned_placements(catalog):
+    plan = [
+        place("CS 1110", "FA24", status="completed", pid="done"),
+        place("CS 2110", "FA26", status="in_progress", pid="now"),
+        Placement(id="slot", term="SP27", slot="ls", credits=3),
+    ]
+    for pid, word in [("done", "already completed"), ("now", "in progress")]:
+        with pytest.raises(OpError, match=word):
+            apply_ops(plan, [ReplaceOp(placement_id=pid, course="CS 1112")], catalog, TERMS)
+    filled = apply_ops(plan, [ReplaceOp(placement_id="slot", course="GOVT 1111")], catalog, TERMS)
+    assert filled[2].course == "GOVT 1111" and filled[2].slot == "ls"
+
+
+def test_advisor_respects_locks(catalog):
+    plan = [place("CS 4740", "FA26", pid="a").model_copy(update={"locked": True})]
+    for op in [
+        RemoveOp(placement_id="a"),
+        MoveOp(placement_id="a", term="SP27"),
+        ReplaceOp(placement_id="a", course="CS 4780"),
+    ]:
+        with pytest.raises(OpError, match="locked in Fall ’26 by the student"):
+            apply_ops(plan, [op], catalog, TERMS, origin="advisor")
+    with pytest.raises(OpError, match="Only the student"):
+        apply_ops(plan, [LockOp(placement_id="a", locked=False)], catalog, TERMS, "advisor")
+    # the student can still remove or swap a locked course; only moving it is blocked
+    assert apply_ops(plan, [RemoveOp(placement_id="a")], catalog, TERMS) == []
+    swapped = apply_ops(plan, [ReplaceOp(placement_id="a", course="CS 4780")], catalog, TERMS)
+    assert swapped[0].course == "CS 4780"
