@@ -32,6 +32,8 @@ AND = re.compile(r"\band\b")
 PAIR = re.compile(r"\b([A-Z]{2,5})\s*(\d{4})\s*[-–]\s*([A-Z]{2,5})\s*(\d{4})\b")
 # a sentence ending in "... recommended" is advice, not a requirement
 ADVICE = re.compile(r"[^.]*\brecommended\s*(\.|$)", re.I)
+# "A or equivalent with B also recommended": only the "with ..." part is advice
+WITH_ADVICE = re.compile(r"\bwith\b[^.]*\brecommended\b", re.I)
 # a sentence that names corequisites mid-text ("... Corequisite: CS 4121.")
 COREQ = re.compile(r"\s*(pre-?requisites?\s+or\s+)?co-?requisites?\b", re.I)
 # "for Computer Science majors: ... Prerequisites for others: ..."
@@ -137,7 +139,7 @@ def _mask_groups(clause: str, concurrent: bool) -> tuple[str, list[PrereqExpr]]:
 
 def _parse_clause(clause: str, concurrent: bool) -> PrereqExpr | None:
     masked, groups = _mask_groups(clause, concurrent)
-    masked = ADVICE.sub(" ", SLASH.sub(" or ", masked))
+    masked = ADVICE.sub(" ", WITH_ADVICE.sub(" ", SLASH.sub(" or ", masked)))
 
     def reqs(chunk: str) -> list[PrereqExpr]:
         out: list[PrereqExpr] = []

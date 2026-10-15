@@ -1,6 +1,7 @@
 from typing import Literal
 
 from app.schemas.base import Schema
+from app.schemas.profile import Term
 
 IssueKind = Literal["ambiguous_code", "credit_mismatch", "ap_credit", "unknown_course", "duplicate"]
 
@@ -45,6 +46,6 @@ class ConfirmedCourse(Schema):
 
 class ConfirmRequest(Schema):
     program: str
-    entering_term: str
-    graduation_term: str
+    entering_term: Term
+    graduation_term: Term
     courses: list[ConfirmedCourse]
