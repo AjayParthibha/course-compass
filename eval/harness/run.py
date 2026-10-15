@@ -18,6 +18,7 @@ from pydantic import TypeAdapter
 from app.catalog.store import get_catalog
 from app.planner.audit import audit
 from app.planner.ops import OpError, apply_ops
+from app.planner.solver import check_plan
 from app.planner.validate import validate
 from app.requirements.loader import load_program
 from app.schemas.plans import PlanOp
@@ -49,7 +50,38 @@ def run_validate(s: Scenario, catalog, program) -> dict:
     }
 
 
-MODES = {"validate": run_validate}
+def run_model(s: Scenario, catalog, program) -> dict:
+    """The CP-SAT model in check mode on the same edited plan; should match validate."""
+    placements = s.placements(catalog)
+    try:
+        placements = apply_ops(
+            placements, parse_ops.validate_python(s.resolved_ops()), catalog, s.terms
+        )
+    except OpError as e:
+        return {"predicted": "infeasible", "error": str(e)}
+    checked = check_plan(
+        placements, s.terms, s.current, catalog, program, max_credits=s.max_credits
+    )
+    if not checked.feasible:
+        return {"predicted": checked.status, "moves": 0}
+    best = check_plan(
+        placements,
+        s.terms,
+        s.current,
+        catalog,
+        program,
+        max_credits=s.max_credits,
+        requirements="maximize",
+    )
+    tops = [r.id for st in program.sets for r in st.requirements]
+    return {
+        "predicted": checked.status,
+        "missing_requirements": " ".join(r for r in tops if r not in best.satisfied),
+        "moves": 0,
+    }
+
+
+MODES = {"validate": run_validate, "model": run_model}
 
 
 def main():
