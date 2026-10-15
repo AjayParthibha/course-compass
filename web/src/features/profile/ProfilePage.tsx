@@ -1,12 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { api, unwrap } from '../../api/client'
 import { keys, useProfile } from '../../api/hooks'
 import type { ProfileFact } from '../../api/types'
 import { Button, SectionLabel, Tag } from '../../ui'
 import { termLabel } from '../../ui/terms'
 import { useAdvisor } from '../advisor/store'
+import PlanSettings from './PlanSettings'
 
 const PROGRAMS: Record<string, [string, string]> = {
   'cs-eng': ['Engineering', 'Computer Science B.S.'],
@@ -149,6 +150,15 @@ export default function ProfilePage() {
   const { data, isLoading } = useProfile()
   const actions = useProfileActions()
   const [adding, setAdding] = useState('')
+  const { hash } = useLocation()
+  const loaded = !!data
+
+  useEffect(() => {
+    if (!loaded || hash !== '#plan-settings') return
+    const el = document.getElementById('plan-settings')
+    el?.scrollIntoView({ block: 'start' })
+    el?.focus({ preventScroll: true })
+  }, [loaded, hash])
 
   if (isLoading || !data) return <div className="p-10 text-muted">Loading…</div>
   const { student, facts } = data
@@ -183,11 +193,16 @@ export default function ProfilePage() {
           type="button"
           role="switch"
           aria-checked={student.memory_enabled}
+          aria-labelledby="memory-switch-label"
+          aria-describedby="memory-switch-hint"
           onClick={() => actions.setMemory(!student.memory_enabled)}
           className="flex min-h-11 items-center gap-3 border-0 bg-transparent"
         >
-          <span className="font-semibold">Remember between sessions</span>
-          <span className={`relative inline-block h-[26px] w-11 rounded-full transition-colors ${student.memory_enabled ? 'bg-ink' : 'bg-[#B9C0B2]'}`}>
+          <span id="memory-switch-label" className="font-semibold">Remember between sessions</span>
+          <span id="memory-switch-hint" className="sr-only">
+            When off, the advisor only uses what you tell it in the current conversation.
+          </span>
+          <span aria-hidden="true" className={`relative inline-block h-[26px] w-11 rounded-full transition-colors ${student.memory_enabled ? 'bg-ink' : 'bg-[#B9C0B2]'}`}>
             <span className={`absolute top-[3px] h-5 w-5 rounded-full bg-white transition-all ${student.memory_enabled ? 'left-[21px]' : 'left-[3px]'}`} />
           </span>
         </button>
@@ -206,8 +221,6 @@ export default function ProfilePage() {
               ['Degree', degree],
               ['Rules used', `${student.catalog_year} catalog`],
               ['Started', student.entering_term ? termLabel(student.entering_term, true) : '—'],
-              ['Graduating', student.graduation_term ? termLabel(student.graduation_term, true) : '—'],
-              ['Most credits in a term', String(student.max_credits)],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between gap-3 border-t border-line-soft px-4 py-2.5">
                 <dt className="text-muted">{k}</dt>
@@ -256,6 +269,8 @@ export default function ProfilePage() {
           </div>
         </section>
       </div>
+
+      <PlanSettings student={student} />
 
       <div className="flex flex-wrap justify-between gap-3 border-t border-line pt-4 text-muted">
         <span>Your profile never includes transcripts or grades you didn’t enter yourself.</span>
