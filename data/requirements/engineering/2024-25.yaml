@@ -1,27 +1,39 @@
-# DRAFT, not verified. College-level Engineering rules shared by every
-# Engineering major. Liberal studies codes in particular need checking.
+# College of Engineering rules shared by every Engineering major. Checked on
+# 2026-10-15 against the 2026-27 Courses of Study and Duffield's liberal studies
+# policy for students entering Fall 2024 and later. Not modelled yet: math and
+# science totalling at least 29 credits, and 123 credits overall for CS.
 id: engineering
 label: College of Engineering
 catalog_year: 2024-25
-source_url: https://www.engineering.cornell.edu/students/undergraduate-students/curriculum/undergraduate-requirements
+source_url: https://catalog.cornell.edu/programs/computer-science-bs/
 verified: false
 requirements:
   - id: eng-physics
     label: Physics
-    kind: courses
-    courses: [PHYS 1112, PHYS 2213]
+    kind: all_of
+    children:
+      - {id: eng-phys-mech, label: PHYS 1112 or 1116, kind: courses, courses: [PHYS 1112, PHYS 1116], count: 1}
+      - {id: eng-phys-em, label: PHYS 2213 or 2217, kind: courses, courses: [PHYS 2213, PHYS 2217], count: 1}
 
   - id: eng-chem
     label: Chemistry
     kind: courses
     courses: [CHEM 2090]
 
+  - id: eng-fourth-science
+    label: Fourth science
+    kind: flag_only
+    count: 1
+    notes: Major-specific; which courses CS accepts isn't confirmed yet.
+
   - id: eng-distribution
     label: Engineering distribution
     kind: filter
     filter: {subjects: [ENGRD], min_level: 2000}
     count: 2
-    double_count: [probability]
+    # CS 2110/2112 count here through their ENGRD cross-listing
+    double_count: [intro-2110]
+    notes: The two courses must come from different distribution categories (not checked yet).
 
   - id: eng-intro
     label: Intro to engineering (ENGRI)
@@ -37,11 +49,46 @@ requirements:
     seed: earliest
     notes: Matched by roster title; every FWS title starts with "FWS:".
 
+  - id: eng-comm
+    label: Engineering communications
+    kind: courses
+    courses: [ENGRC 3023, ENGRC 3024, ENGRC 3025, ENGRC 3026, ENGRC 3027, ENGRC 3152, ENGRC 3340, ENGRC 3341, ENGRC 3350, ENGRC 3500, ENGRC 3600, ENGRC 3610, ENGRC 3700, ENGRC 4152, COMM 3020, COMM 3030, HADM 3670]
+    count: 1
+    # "Engineering-communication courses may simultaneously fulfill another requirement"
+    double_count: [ls, aae, eng-aae]
+    notes: Writing- or communication-intensive courses in the major also qualify; ENGRC 3152 and 4152 pair with CS 3152 and 4152.
+
   - id: ls
     label: Liberal studies
     kind: filter
     filter:
-      attributes_any: [ALC-AS, ETM-AS, GLC-AS, HST-AS, SCD-AS, SSC-AS, CA-AG, HA-AG, KCM-AG, LA-AG, SBA-AG, FL-AG]
+      attributes_any: [CA-AG, CA-HE, LA-AG, LAD-HE, ALC-AS, ALC-AAP, ALC-HA, SCD-HA, SCD-AS, HA-AG, HA-HE, HST-AS, KCM-AG, KCM-HE, ETM-AS, ETM-HA, SBA-AG, SBA-HE, SSC-AS, SSC-AAP, SSC-HA, GLC-AS, GLC-HA, FL-AG, CE-EN, D-AG]
       min_credits: 3
     count: 6
     credits: 18
+    double_count: [eng-comm]
+    notes: >-
+      Courses must span at least three of the seven groups, include at least 3 credits from
+      Group 7 (SCD-AS or D-AG), use at most two Group 6 (CE) courses, and include at least
+      two at the 2000 level or higher (not checked yet). One-credit courses can't count.
+
+  - id: eng-aae
+    label: Advisor-approved electives
+    kind: filter
+    filter: {min_level: 1100, exclude_subjects: [PE]}
+    count: 2
+    credits: 6
+    double_count: [eng-comm]
+    notes: Approved by the faculty advisor; courses below where the curriculum starts (MATH 1110, CS 1109) don't count.
+
+  - id: eng-pe
+    label: Physical education
+    kind: flag_only
+    count: 2
+    notes: Two semesters of PE (university requirement).
+
+  - id: eng-swim
+    label: Swim test
+    kind: flag_only
+    count: 1
+    notes: Demonstrate proficiency in swimming (university requirement).

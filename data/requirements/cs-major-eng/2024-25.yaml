@@ -1,9 +1,12 @@
-# DRAFT, not verified. Structure follows the design mockup; check every count
-# and course list against the source page before relying on it.
+# Checked on 2026-10-15 against the 2026-27 Courses of Study (the 2024-25 edition
+# wouldn't load): https://catalog.cornell.edu/programs/computer-science-bs/
+# Nothing found differs for Fall 2024 entrants except possibly the practicum list
+# (CoursePlan's 2024 data also listed CS 4154 and CS 5431). Rules the model can't
+# check yet are in `notes`.
 id: cs-major-eng
 label: CS major (Engineering)
 catalog_year: 2024-25
-source_url: https://www.cs.cornell.edu/undergrad/rulesandproceduresengineering
+source_url: https://catalog.cornell.edu/programs/computer-science-bs/
 verified: false
 requirements:
   - id: intro
@@ -20,6 +23,8 @@ requirements:
         kind: courses
         courses: [CS 2110, CS 2112]
         count: 1
+        # CS 2110/2112 are cross-listed as ENGRD 2110/2112 and also fill a distribution
+        double_count: [eng-distribution]
 
   - id: math
     label: Math
@@ -35,43 +40,57 @@ requirements:
       - {id: core-3410, label: CS 3410 or 3420, kind: courses, courses: [CS 3410, CS 3420], count: 1}
       - {id: core-4410, label: CS 4410 or 4414, kind: courses, courses: [CS 4410, CS 4414], count: 1}
       - {id: core-4820, label: CS 4820, kind: courses, courses: [CS 4820], count: 1}
-      - {id: core-3780, label: CS 3780, kind: courses, courses: [CS 3780], count: 1}
-
-  - id: probability
-    label: Probability
-    kind: courses
-    courses: [BTRY 3080, CS 4850, ECE 3100, ENGRD 2700, MATH 4710]
-    count: 1
-    double_count: [eng-distribution]
+      # id kept from when the slot was CS 3780 alone, so existing plans still match
+      - {id: core-3780, label: CS 3700 or 3780, kind: courses, courses: [CS 3700, CS 3780], count: 1}
 
   - id: e4000
     label: 4000+ CS electives
     kind: filter
-    filter: {subjects: [CS], min_level: 4000, min_credits: 3}
+    filter:
+      subjects: [CS]
+      min_level: 4000
+      min_credits: 3
+      exclude: [CS 4090, CS 4997, CS 4998, CS 4999]
     count: 2
     double_count: [practicum]
+    notes: >-
+      CS 3700 or CS 3780 also counts when it isn't used for the core (not modelled yet).
+      Whether a practicum course may also count here isn't stated in the catalog; kept as before.
 
   - id: practicum
-    label: Practicum
+    label: Practicum or project
     kind: courses
-    courses: [CS 4121, CS 4152, CS 4154, CS 4411, CS 4450, CS 4621, CS 4701, CS 4758, CS 5150, CS 5152, CS 5412, CS 5414, CS 5431, CS 5625, CS 5643]
+    courses: [CS 3152, CS 4121, CS 4152, CS 4321, CS 4411, CS 4621, CS 4701, CS 4740, CS 5121, CS 5150, CS 5152, CS 5321, CS 5411, CS 5412, CS 5414, CS 5621, CS 5625, CS 5643, CS 5740]
     count: 1
     double_count: [e4000]
 
   - id: tech
     label: Technical electives
     kind: filter
-    filter: {min_level: 3000, min_credits: 3}
+    filter:
+      min_level: 3000
+      min_credits: 3
+      exclude: [CS 4090, CS 4997, CS 4998]
     count: 3
+    notes: >-
+      Each course needs a qualifying prerequisite or corequisite listed in the catalog
+      (not checked yet). One 2000+ course and up to two research courses may count.
 
   - id: ext
     label: External specialization
     kind: filter
     filter: {min_level: 3000, exclude_subjects: [CS], min_credits: 3}
     count: 3
+    notes: >-
+      The three courses must share a prefix or an advisor-approved topic; at most one may be
+      cross-listed with CS; no research, independent study, project team, PE or teaching credit.
 
+  # id kept for existing plans; this is the major's elective, not the college's
   - id: aae
-    label: Advisor-approved elective
-    kind: flag_only
+    label: Major-approved elective
+    kind: filter
+    filter: {min_level: 1100, exclude_subjects: [PE]}
     count: 1
-    notes: Needs a faculty advisor's sign-off, so we show it but never mark it done.
+    credits: 3
+    double_count: [eng-comm]
+    notes: One course of 3+ credits or several totalling 3; S/U allowed; no AP/IB credit.
