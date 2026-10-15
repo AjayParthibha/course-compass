@@ -20,7 +20,9 @@ def matches(course: Course, req: Requirement, catalog: Catalog) -> bool:
 
 
 def matches_filter(course: Course, f: CourseFilter) -> bool:
-    if f.subjects and course.subject not in f.subjects:
+    # a cross-listing counts too: CS 2110 is also ENGRD 2110
+    subjects = {course.subject, *(code.split()[0] for code in course.cross_listed)}
+    if f.subjects and not subjects & set(f.subjects):
         return False
     if course.subject in f.exclude_subjects or course.code in f.exclude:
         return False
@@ -43,9 +45,18 @@ def needed(req: Requirement) -> int:
     return len(req.courses) if req.kind == "courses" else 1
 
 
+def fill_order(req: Requirement) -> int:
+    """Course lists first, then filters that name a subject, attribute or title, then
+    catch-all electives, so a broad elective can't take a course a narrower rule needs."""
+    if req.kind == "courses":
+        return 0
+    f = req.filter
+    return 1 if f and (f.subjects or f.attributes_any or f.title_prefix) else 2
+
+
 def audit(placements: list[Placement], program: Program, catalog: Catalog) -> AuditResult:
     leaves = [r for r in program.all_requirements() if r.kind in ("courses", "filter")]
-    leaves.sort(key=lambda r: 0 if r.kind == "courses" else 1)
+    leaves.sort(key=fill_order)
 
     used_by: dict[str, set[str]] = {}  # placement id -> requirement ids it counts toward
     filled: dict[str, list[Placement]] = {r.id: [] for r in program.all_requirements()}
