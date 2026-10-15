@@ -18,7 +18,13 @@ describe('summarizeRequirements', () => {
     }
     const s = summarizeRequirements(audit)
     expect(s.headline).toBe('2 of 6 requirements done')
-    expect(s.details).toEqual(['2 planned', '2 slots to fill', '2 need attention'])
+    expect(s.details).toEqual(['2 planned', '2 slots to fill', '1 to confirm', '1 needs attention'])
+  })
+
+  it('counts flagged requirements as ones to confirm, not problems', () => {
+    const audit: AuditResult = { complete: true, unassigned: [], requirements: [req('a', 'done'), req('f', 'flagged')] }
+    expect(summarizeRequirements(audit).details).toEqual(['1 to confirm'])
+    expect(summarizeRequirements(audit, 2).details).toEqual(['1 to confirm', '2 need attention'])
   })
 
   it('leaves out empty categories', () => {

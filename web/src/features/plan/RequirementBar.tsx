@@ -10,11 +10,11 @@ const dot: Record<string, string> = {
   flagged: 'bg-highlight border border-ink',
 }
 
-export default function RequirementBar({ audit }: { audit: AuditResult }) {
+export default function RequirementBar({ audit, problems = 0 }: { audit: AuditResult; problems?: number }) {
   const { highlightReq, setHighlightReq } = usePlanUI()
   const [open, setOpen] = useState(false)
   const listId = useId()
-  const summary = summarizeRequirements(audit)
+  const summary = summarizeRequirements(audit, problems)
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-white px-3 py-2 text-[13px] md:hidden">
@@ -34,7 +34,7 @@ export default function RequirementBar({ audit }: { audit: AuditResult }) {
           {open ? 'Hide' : 'Details'}
         </button>
       </div>
-      <div id={listId} className={`${open ? 'flex' : 'hidden'} flex-wrap gap-1.5 md:flex`} role="list" aria-label="Requirements">
+      <ul id={listId} className={`${open ? 'flex' : 'hidden'} m-0 list-none flex-wrap gap-1.5 p-0 md:flex`} role="list" aria-label="Requirements">
         {audit.requirements.map((r) => {
           const covered = r.children.length
             ? r.children.filter((c) => c.status !== 'missing').length
@@ -44,31 +44,31 @@ export default function RequirementBar({ audit }: { audit: AuditResult }) {
           const flagged = r.status === 'flagged'
           const active = highlightReq === r.id
           return (
-            <button
-              key={r.id}
-              role="listitem"
-              type="button"
-              onClick={() => setHighlightReq(active ? null : r.id)}
-              aria-pressed={active}
-              title={
-                flagged
-                  ? 'Needs sign-off; not checked automatically'
-                  : r.open_slots
-                    ? `${chosen} chosen, ${r.open_slots} open slot${r.open_slots > 1 ? 's' : ''} still to fill`
-                    : r.status
-              }
-              className={`flex h-8 items-center gap-2 rounded-full border px-3 text-[12.5px] ${active ? 'border-ink bg-ink text-paper' : 'border-line bg-white'}`}
-            >
-              <span className={`h-2 w-2 rounded-full ${dot[r.status]}`} />
-              <span className="font-semibold">{r.label}</span>
-              <span className={`font-mono text-[11px] ${active ? 'text-paper' : 'text-muted'}`}>
-                {flagged ? 'check' : `${chosen}/${r.children.length || r.needed}`}
-                {!flagged && r.open_slots > 0 && ` · ${r.open_slots} open`}
-              </span>
-            </button>
+            <li key={r.id} className="flex">
+              <button
+                type="button"
+                onClick={() => setHighlightReq(active ? null : r.id)}
+                aria-pressed={active}
+                title={
+                  flagged
+                    ? 'Needs sign-off; not checked automatically'
+                    : r.open_slots
+                      ? `${chosen} chosen, ${r.open_slots} open slot${r.open_slots > 1 ? 's' : ''} still to fill`
+                      : r.status
+                }
+                className={`flex h-8 items-center gap-2 rounded-full border px-3 text-[12.5px] ${active ? 'border-ink bg-ink text-paper' : 'border-line bg-white'}`}
+              >
+                <span className={`h-2 w-2 rounded-full ${dot[r.status]}`} />
+                <span className="font-semibold">{r.label}</span>
+                <span className={`font-mono text-[11px] ${active ? 'text-paper' : 'text-muted'}`}>
+                  {flagged ? 'check' : `${chosen}/${r.children.length || r.needed}`}
+                  {!flagged && r.open_slots > 0 && ` · ${r.open_slots} open`}
+                </span>
+              </button>
+            </li>
           )
         })}
-      </div>
+      </ul>
     </div>
   )
 }
