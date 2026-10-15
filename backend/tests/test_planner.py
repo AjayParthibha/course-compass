@@ -397,3 +397,34 @@ def test_parse_keeps_the_requirement_before_with_recommended():
     expr = parse(text)
     assert expr is not None
     assert "BTRY 3020" in str(expr) and "BTRY 3080" not in str(expr)
+
+
+def test_subject_filter_matches_cross_listing(catalog):
+    cs2110 = catalog.get("CS 2110").model_copy(update={"cross_listed": ["ENGRD 2110"]})
+    assert matches_filter(cs2110, CourseFilter(subjects=["ENGRD"], min_level=2000))
+    assert not matches_filter(catalog.get("CS 2110"), CourseFilter(subjects=["ENGRD"]))
+
+
+def test_broad_electives_fill_after_specific_rules(catalog):
+    from app.schemas.requirements import Program, Requirement, RequirementSet
+
+    broad = Requirement(id="any", label="Any", kind="filter", filter=CourseFilter(), count=1)
+    social = Requirement(
+        id="ss",
+        label="Social",
+        kind="filter",
+        filter=CourseFilter(attributes_any=["SSC-AS"]),
+        count=1,
+    )
+    rules = RequirementSet(
+        id="t", label="t", catalog_year="2024-25", source_url="x", requirements=[broad, social]
+    )
+    program = Program(id="t", label="t", college="t", catalog_year="2024-25", sets=[rules])
+    econ = catalog.get("ECON 1110")
+    assert "SSC-AS" in econ.attributes
+    by_id = {
+        r.id: r
+        for r in audit([place("ECON 1110", "FA25", 3, "completed")], program, catalog).requirements
+    }
+    # listed first, but the catch-all waits so the social-science rule gets ECON 1110
+    assert by_id["ss"].filled == ["ECON 1110"] and by_id["any"].filled == []
