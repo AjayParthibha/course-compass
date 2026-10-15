@@ -1,7 +1,38 @@
-import { useMemo } from 'react'
-import { parseMarkdown, type Inline, type ListBlock, type MdBlock } from './markdown'
+import { Component, useMemo, type ReactNode } from 'react'
+import { misleadingLinkHost, parseMarkdown, plainText, type Inline, type ListBlock, type MdBlock } from './markdown'
 
-export default function MarkdownText({ text, streaming = false }: { text: string; streaming?: boolean }) {
+type Props = { text: string; streaming?: boolean }
+
+export default function MarkdownText({ text, streaming = false }: Props) {
+  return (
+    <PlainOnError text={text}>
+      <Markdown text={text} streaming={streaming} />
+    </PlainOnError>
+  )
+}
+
+type BoundaryState = { failed: boolean; text: string }
+
+/** If formatting a reply ever fails, show it as plain text instead of taking the page down. */
+class PlainOnError extends Component<{ text: string; children: ReactNode }, BoundaryState> {
+  state: BoundaryState = { failed: false, text: this.props.text }
+
+  static getDerivedStateFromError(): Partial<BoundaryState> {
+    return { failed: true }
+  }
+
+  // try formatting again when more text streams in
+  static getDerivedStateFromProps(props: { text: string }, state: BoundaryState): BoundaryState | null {
+    return props.text === state.text ? null : { failed: false, text: props.text }
+  }
+
+  render() {
+    if (this.state.failed) return <p className="m-0 leading-relaxed whitespace-pre-wrap">{this.props.text}</p>
+    return this.props.children
+  }
+}
+
+function Markdown({ text, streaming = false }: Props) {
   const blocks = useMemo(() => parseMarkdown(text, { streaming }), [text, streaming])
   return <div className="flex flex-col gap-2 leading-relaxed">{blocks.map(renderBlock)}</div>
 }
@@ -56,12 +87,23 @@ function renderInline(nodes: Inline[]) {
             {n.text}
           </code>
         )
-      case 'link':
+      case 'link': {
+        // a label that reads like another address gets the real one next to it
+        const realHost = misleadingLinkHost(plainText(n.children), n.href)
         return (
-          <a key={i} href={n.href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+          <a
+            key={i}
+            href={n.href}
+            title={n.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2"
+          >
             {renderInline(n.children)}
+            {realHost && <span className="text-muted"> ({realHost})</span>}
           </a>
         )
+      }
     }
   })
 }
