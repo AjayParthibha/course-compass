@@ -17,14 +17,19 @@ NOT_INTERESTED = "not_interested"
 
 
 def not_interested_facts(db: Session, student: models.Student, code: str | None = None):
+    """The student's "not for me" facts; with `code`, only those that hide that course,
+    including facts saved under one of its cross-listings."""
     q = select(models.ProfileFact).where(
         models.ProfileFact.student_id == student.id,
         models.ProfileFact.dimension == NOT_INTERESTED,
         models.ProfileFact.status == "stated",
     )
-    if code is not None:
-        q = q.where(models.ProfileFact.value == code)
-    return list(db.scalars(q.order_by(models.ProfileFact.id)))
+    facts = list(db.scalars(q.order_by(models.ProfileFact.id)))
+    if code is None:
+        return facts
+    catalog = get_catalog()
+    same = catalog.equivalents(code)
+    return [f for f in facts if f.value in same or code in catalog.equivalents(f.value)]
 
 
 @router.get("/slots/{slot_id}/candidates")
@@ -90,7 +95,8 @@ def _course_or_404(code: str) -> Course:
 @router.put("/courses/{code}/not-interested", tags=["profile"])
 def mark_not_interested(code: str, db: DB, student: CurrentStudent) -> ProfileFact:
     """Remember that the student doesn't want this course suggested. Saved as a stated
-    profile fact, so it shows on the profile page and can be removed there."""
+    profile fact, so it shows on the profile page and can be removed there. Marking a
+    course whose cross-listing is already marked returns the existing fact."""
     course = _course_or_404(code)
     existing = not_interested_facts(db, student, course.code)
     if existing:
@@ -111,6 +117,7 @@ def mark_not_interested(code: str, db: DB, student: CurrentStudent) -> ProfileFa
 
 @router.delete("/courses/{code}/not-interested", status_code=204, tags=["profile"])
 def unmark_not_interested(code: str, db: DB, student: CurrentStudent) -> None:
+    """Show the course again, whichever of its cross-listed codes it was hidden under."""
     course = _course_or_404(code)
     for row in not_interested_facts(db, student, course.code):
         db.delete(row)

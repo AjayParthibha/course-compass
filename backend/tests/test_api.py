@@ -394,3 +394,23 @@ def test_advisor_cannot_lock_or_touch_locked(client, auth):
     ops(client, auth, {"op": "lock", "placement_id": slot["id"]})
     with pytest.raises(OpError, match="locked in Spring ’27 by the student"):
         propose(auth, "Drop it", [{"op": "remove", "placement_id": slot["id"]}])
+
+
+def test_not_interested_covers_cross_listings(client, auth, catalog, monkeypatch):
+    monkeypatch.setattr(catalog.get("GOVT 1111"), "cross_listed", ["PSYCH 1101"])
+    monkeypatch.setattr(catalog.get("PSYCH 1101"), "cross_listed", ["GOVT 1111"])
+    onboard(client, auth)
+    url, params = "/api/slots/ls/candidates", {"term": "SP27", "limit": 10}
+
+    fact = client.put("/api/courses/PSYCH 1101/not-interested", headers=auth).json()
+    hidden = client.get(url, params=params, headers=auth).json()["hidden"]
+    assert [(h["course"]["code"], h["fact_id"]) for h in hidden] == [("GOVT 1111", fact["id"])]
+    # marking the code the slot shows doesn't add a second fact
+    again = client.put("/api/courses/GOVT 1111/not-interested", headers=auth).json()
+    assert again["id"] == fact["id"]
+    facts = client.get("/api/profile", headers=auth).json()["facts"]
+    assert [f["id"] for f in facts if f["dimension"] == "not_interested"] == [fact["id"]]
+
+    # "show again" on the shown code removes the fact saved under the other one
+    assert client.delete("/api/courses/GOVT 1111/not-interested", headers=auth).status_code == 204
+    assert client.get(url, params=params, headers=auth).json()["hidden"] == []
