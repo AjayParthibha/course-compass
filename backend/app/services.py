@@ -77,12 +77,19 @@ def current_placements(db: Session, plan: models.Plan) -> list[s.Placement]:
     return [s.Placement.model_validate(p) for p in row.placements] if row else []
 
 
-def plan_schema(db: Session, st: models.Student, plan: models.Plan, placements=None) -> s.Plan:
-    placements = placements if placements is not None else current_placements(db, plan)
+def annotate(placements: list[s.Placement]) -> list[s.Placement]:
+    """Fill in what responses show but the plan history doesn't store."""
     catalog = get_catalog()
     for p in placements:
-        if p.course and (course := catalog.get(p.course)):
+        course = catalog.get(p.course) if p.course else None
+        if course:
             p.title = course.title
+        p.counts_as = sorted(catalog.prereq_credit(course.code) - {course.code}) if course else []
+    return placements
+
+
+def plan_schema(db: Session, st: models.Student, plan: models.Plan, placements=None) -> s.Plan:
+    placements = placements if placements is not None else current_placements(db, plan)
     return s.Plan(
         id=plan.id,
         name=plan.name,
@@ -90,7 +97,7 @@ def plan_schema(db: Session, st: models.Student, plan: models.Plan, placements=N
         program=st.program,
         terms=terms_between(st.entering_term, st.graduation_term),
         current_term=get_settings().current_term,
-        placements=placements,
+        placements=annotate(placements),
     )
 
 
@@ -131,7 +138,7 @@ def commit(
             plan_id=plan.id,
             version=plan.version,
             parent_version=parent,
-            placements=[p.model_dump() for p in placements],
+            placements=[p.model_dump(exclude={"counts_as"}) for p in placements],
             origin=origin,
             note=note,
         )
@@ -143,7 +150,7 @@ def preview_ops(db: Session, st: models.Student, ops: list[s.PlanOp], origin="us
     plan = get_plan(db, st)
     current = plan_schema(db, st, plan)
     new = apply_ops(current.placements, ops, get_catalog(), current.terms, origin, slot_labels(st))
-    return evaluate(st, current.model_copy(update={"placements": new}))
+    return evaluate(st, current.model_copy(update={"placements": annotate(new)}))
 
 
 def apply_plan_ops(

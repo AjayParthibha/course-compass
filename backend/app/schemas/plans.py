@@ -24,6 +24,9 @@ class Placement(Schema):
     status: PlacementStatus = "planned"
     locked: bool = False
     origin: Origin = "user"
+    # other codes this course stands in for when checking prerequisites (cross-listings
+    # and listed equivalents); filled in responses, ignored on input
+    counts_as: list[str] = []
 
 
 class Plan(Schema):

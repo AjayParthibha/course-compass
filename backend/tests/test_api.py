@@ -449,3 +449,27 @@ def test_onboarding_rejects_backwards_terms(client, auth):
     body = {"program": "cs-eng", "entering_term": "FA24", "graduation_term": "SP24", "courses": []}
     res = client.post("/api/onboarding/confirm", json=body, headers=auth)
     assert res.status_code == 400
+
+
+def test_placements_list_what_they_count_as(client, auth, catalog, monkeypatch):
+    from app import models
+    from app.models import SessionLocal
+
+    monkeypatch.setattr(catalog.get("CS 4780"), "cross_listed", ["ORIE 4741"])
+    monkeypatch.setitem(catalog.prereq_equivalents, "CS 1110", ["CS 1112"])
+    state = onboard(client, auth).json()
+    by_course = {p["course"]: p for p in state["plan"]["placements"] if p["course"]}
+    assert by_course["CS 1110"]["counts_as"] == ["CS 1112"]
+    assert by_course["CS 2110"]["counts_as"] == []
+    assert all(p["counts_as"] == [] for p in state["plan"]["placements"] if not p["course"])
+
+    add = {"op": "add", "term": "SP27", "course": "CS 4780"}
+    dry = client.post("/api/plan/ops", json={"ops": [add], "dry_run": True}, headers=auth).json()
+    assert next(p for p in dry["plan"]["placements"] if p["course"] == "CS 4780")["counts_as"] == [
+        "ORIE 4741"
+    ]
+
+    # computed for responses only, not saved with the plan
+    with SessionLocal() as db:
+        row = db.query(models.PlanVersion).order_by(models.PlanVersion.id.desc()).first()
+        assert all("counts_as" not in p for p in row.placements)
