@@ -34,3 +34,8 @@ export function creditError(value: string, required = false) {
 export function capsToSave(caps: Record<string, string>, remaining: string[]) {
   return Object.fromEntries(remaining.filter((t) => caps[t]?.trim()).map((t) => [t, Number(caps[t])]))
 }
+
+/** Saved caps for the given terms only; caps on the current or past terms aren't editable here. */
+export function capsIn(caps: Record<string, number>, terms: string[]) {
+  return Object.fromEntries(terms.filter((t) => caps[t] != null).map((t) => [t, caps[t]]))
+}

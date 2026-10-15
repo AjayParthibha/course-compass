@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { capsToSave, creditError, nextTerm, termsAfter } from './settings'
+import { capsIn, capsToSave, creditError, nextTerm, termsAfter } from './settings'
 
 describe('plan settings helpers', () => {
   it('steps through fall and spring terms', () => {
@@ -21,5 +21,11 @@ describe('plan settings helpers', () => {
 
   it('keeps only filled caps for remaining terms', () => {
     expect(capsToSave({ SP27: '15', FA27: '', SP28: '14' }, ['SP27', 'FA27'])).toEqual({ SP27: 15 })
+  })
+
+  it('compares saved caps on the remaining terms only', () => {
+    // a cap left on the current term doesn't make the form look edited
+    expect(capsIn({ FA26: 12, SP27: 15 }, termsAfter('FA26', 'SP28'))).toEqual({ SP27: 15 })
+    expect(capsIn({ FA26: 12 }, [])).toEqual({})
   })
 })
