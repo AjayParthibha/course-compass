@@ -1,9 +1,17 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useCandidates, usePlan, usePlanOps } from '../../api/hooks'
-import type { Candidate } from '../../api/types'
+import type { Candidate, SlotCandidates } from '../../api/types'
 import { Button, SectionLabel, Tag } from '../../ui'
+import { cureviewsUrl } from '../../ui/links'
 import { termLabel } from '../../ui/terms'
+import { useNotForMe } from './notForMe'
+import SlotIndex from './SlotIndex'
+import { openSlots, slotHref } from './slots'
+
+type CourseSummary = Candidate['course']
+
+const touch = 'max-sm:h-11'
 
 const basisTag = (r: Candidate['reasons'][number]) => {
   if (r.basis === 'stated') return <Tag kind="said">You said{r.date ? ` · ${r.date}` : ''}</Tag>
@@ -12,22 +20,23 @@ const basisTag = (r: Candidate['reasons'][number]) => {
 }
 
 function CandidateCard({ c, term, onPick, onHide }: { c: Candidate; term: string; onPick: () => void; onHide: () => void }) {
-  const top = c.rank === 1
+  const titleId = useId()
   return (
-    <article className={`flex flex-col gap-4 rounded-xl bg-white p-5 ${top ? 'border-[1.5px] border-ink' : 'border border-line'}`}>
+    <article aria-labelledby={titleId} className="flex flex-col gap-4 rounded-xl border border-line bg-white p-4 sm:p-5">
       <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
-        <span className={`font-mono text-[40px] leading-[0.9] font-semibold ${top ? 'text-accent' : 'text-faint'}`}>{c.rank}</span>
-        <div className="flex min-w-[220px] flex-1 flex-col gap-1">
+        <div className="flex min-w-0 flex-[1_1_220px] flex-col gap-1">
           <span className="font-mono text-[13px] font-semibold">
             {c.course.code} · {c.course.credits} cr
           </span>
-          <h2 className="m-0 text-xl font-extrabold tracking-tight">{c.course.title}</h2>
+          <h2 id={titleId} className="m-0 text-xl font-extrabold tracking-tight">{c.course.title}</h2>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant={top ? 'primary' : 'secondary'} onClick={onPick}>
+          <Button variant="primary" className={touch} aria-describedby={titleId} onClick={onPick}>
             Put it in {termLabel(term)}
           </Button>
-          <Button onClick={onHide}>Not for me</Button>
+          <Button className={touch} aria-describedby={titleId} onClick={onHide}>
+            Not for me
+          </Button>
         </div>
       </div>
       {c.reasons.length > 0 && (
@@ -49,62 +58,128 @@ function CandidateCard({ c, term, onPick, onHide }: { c: Candidate; term: string
             <span className="text-muted">{termLabel(term)} isn’t scheduled yet. Assumed from history.</span>
           )}
         </div>
-        <div className="flex flex-col gap-2 rounded-lg border border-dashed border-[#9EA698] p-3.5">
-          <SectionLabel className="text-ink!">Students say · CUReviews</SectionLabel>
-          {c.reviews ? (
-            <>
-              <div className="grid grid-cols-3 gap-2">
-                {(
-                  [
-                    ['Overall', c.reviews.overall],
-                    ['Difficulty', c.reviews.difficulty],
-                    ['Workload', c.reviews.workload],
-                  ] as const
-                ).map(([label, v]) => (
-                  <div key={label} className="flex flex-col">
-                    <span className="font-mono text-xl font-semibold">{v.toFixed(1)}</span>
-                    <span className="text-[12px] text-muted">{label}</span>
-                  </div>
-                ))}
-              </div>
-              <span className="text-[12.5px] text-muted">
-                Out of 5 · {c.reviews.count} reviews · opinions, not official info
-              </span>
-              <a href={c.reviews.url} target="_blank" rel="noreferrer" className="text-[13px] font-semibold">
-                Read them on CUReviews
-              </a>
-            </>
-          ) : (
-            <span className="text-muted">No reviews found. We won’t guess.</span>
-          )}
-        </div>
+        {c.reviews && (
+          <div className="flex flex-col gap-2 rounded-lg border border-dashed border-[#9EA698] p-3.5">
+            <SectionLabel className="text-ink!">Students say · CUReviews</SectionLabel>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  ['Overall', c.reviews.overall],
+                  ['Difficulty', c.reviews.difficulty],
+                  ['Workload', c.reviews.workload],
+                ] as const
+              ).map(([label, v]) => (
+                <div key={label} className="flex flex-col">
+                  <span className="font-mono text-xl font-semibold">{v.toFixed(1)}</span>
+                  <span className="text-[12px] text-muted">{label}</span>
+                </div>
+              ))}
+            </div>
+            <span className="text-[12.5px] text-muted">
+              Out of 5 · {c.reviews.count} reviews · opinions, not official info
+            </span>
+            <ReviewsLink code={c.course.code} href={c.reviews.url} />
+          </div>
+        )}
       </div>
+      {!c.reviews && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
+          <span className="text-muted">Student opinion, not official:</span>
+          <ReviewsLink code={c.course.code} />
+        </div>
+      )}
     </article>
   )
 }
 
-export default function ExplorePage() {
-  const { slotId } = useParams()
-  const [params] = useSearchParams()
+function ReviewsLink({ code, href }: { code: string; href?: string }) {
+  return (
+    <a
+      href={href || cureviewsUrl(code)}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Read ${code} reviews on CUReviews (opens in a new tab)`}
+      className="inline-flex min-h-11 items-center text-[13px] font-semibold sm:min-h-0"
+    >
+      Read reviews on CUReviews
+    </a>
+  )
+}
+
+function HiddenRow({ course, onUndo, busy }: { course: CourseSummary; onUndo: () => void; busy: boolean }) {
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line-soft py-2 first:border-t-0">
+      <span className="min-w-0">
+        <span className="font-mono text-[13px] font-semibold">{course.code}</span>{' '}
+        <span className="text-muted">{course.title}</span>
+      </span>
+      <Button variant="quiet" className={`${touch} font-semibold`} aria-label={`Show again: ${course.code}`} disabled={busy} onClick={onUndo}>
+        Show again
+      </Button>
+    </li>
+  )
+}
+
+function Sidebar({ data }: { data: SlotCandidates | undefined }) {
+  return (
+    <aside aria-label="About this list" className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
+      {data && data.factors.length > 0 && (
+        <section className="flex flex-col gap-3.5 rounded-xl border border-line bg-white p-4">
+          <SectionLabel>What shaped the ranking</SectionLabel>
+          {data.factors.map((f) => (
+            <div key={f.label} className="flex flex-col gap-1">
+              <div className="flex justify-between gap-2">
+                <span className={`font-semibold ${f.strength === 'not used' ? 'text-muted' : ''}`}>{f.label}</span>
+                <span className="font-mono text-[12px]">{f.strength}</span>
+              </div>
+              {f.strength !== 'not used' && (
+                <div className="h-1.5 rounded bg-chip">
+                  <div
+                    className="h-1.5 rounded bg-ink"
+                    style={{ width: f.strength === 'strong' ? '90%' : f.strength === 'medium' ? '50%' : '25%' }}
+                  />
+                </div>
+              )}
+              <span className="text-[12.5px] text-muted">{f.basis}</span>
+            </div>
+          ))}
+          <Link to="/profile" className="font-semibold">Edit what the advisor knows</Link>
+        </section>
+      )}
+      <section className="flex flex-col gap-2.5 rounded-xl border border-line p-4">
+        <SectionLabel>Sources</SectionLabel>
+        <div className="flex flex-col">
+          <a href="https://classes.cornell.edu/" target="_blank" rel="noreferrer" className="font-semibold">Cornell Class Roster</a>
+          <span className="text-[12.5px] text-muted">Official · cached snapshot</span>
+        </div>
+        <div className="flex flex-col">
+          <a href="https://www.cs.cornell.edu/undergrad" target="_blank" rel="noreferrer" className="font-semibold">CS degree requirements</a>
+          <span className="text-[12.5px] text-muted">Official · decides what counts for this slot</span>
+        </div>
+        <div className="flex flex-col">
+          <a href="https://www.cureviews.org/" target="_blank" rel="noopener noreferrer" className="font-semibold">CUReviews</a>
+          <span className="text-[12.5px] text-muted">Student opinion · linked, not imported</span>
+        </div>
+      </section>
+    </aside>
+  )
+}
+
+function SlotOptions({ slotId, term, placementId }: { slotId: string; term: string; placementId: string | null }) {
   const navigate = useNavigate()
   const { data: state } = usePlan()
   const ops = usePlanOps()
+  const { hide, unhide } = useNotForMe()
   const [limit, setLimit] = useState(3)
-  const [hidden, setHidden] = useState<string[]>([])
-  const term = params.get('term') ?? ''
-  const placementId = params.get('placement')
-  const { data, isLoading, error } = useCandidates(slotId ?? '', term, limit)
+  const [hiding, setHiding] = useState<string[]>([])
+  const [undoing, setUndoing] = useState<string[]>([])
+  const [lastHidden, setLastHidden] = useState<CourseSummary | null>(null)
+  const { data, isLoading, error } = useCandidates(slotId, term, limit)
+  const switchId = useId()
 
-  if (!slotId && state) {
-    const open = state.plan.placements.find((p) => p.slot && !p.course && p.term !== state.plan.current_term)
-    if (open) return <Navigate to={`/explore/${open.slot}?term=${open.term}&placement=${open.id}`} replace />
-    return (
-      <main className="mx-auto max-w-3xl px-6 py-10">
-        <h1 className="text-2xl font-extrabold">No open slots</h1>
-        <p className="text-muted">Every requirement in your plan has a course. Pick a course in the graph to look at alternatives.</p>
-      </main>
-    )
-  }
+  const slots = state ? openSlots(state) : []
+  const here = slots.find((p) => p.id === placementId)
+  const slotLabel = data?.slot_label ?? here?.slot_label ?? slotId
 
   const pick = (code: string) => {
     const op = placementId
@@ -113,91 +188,149 @@ export default function ExplorePage() {
     ops.mutate([op], { onSuccess: () => navigate('/plan') })
   }
 
-  const visible = data?.candidates.filter((c) => !hidden.includes(c.course.code)) ?? []
+  const hideCourse = (course: CourseSummary) => {
+    setHiding((h) => [...h, course.code])
+    setLastHidden(course)
+    hide.mutate(course.code, { onSettled: () => setHiding((h) => h.filter((x) => x !== course.code)) })
+  }
+
+  const undo = (code: string) => {
+    setUndoing((u) => [...u, code])
+    unhide.mutate(code, {
+      onSuccess: () => setLastHidden((l) => (l?.code === code ? null : l)),
+      onSettled: () => setUndoing((u) => u.filter((x) => x !== code)),
+    })
+  }
+
+  const visible = data?.candidates.filter((c) => !hiding.includes(c.course.code)) ?? []
+  const hidden = data?.hidden.filter((h) => !undoing.includes(h.course.code)) ?? []
+  const showLast =
+    lastHidden && (hiding.includes(lastHidden.code) || hidden.some((h) => h.course.code === lastHidden.code))
+  const olderHidden = hidden.filter((h) => h.course.code !== (showLast ? lastHidden.code : null))
+  const ranked = !!data && (data.factors.length > 0 || data.candidates.some((c) => c.reasons.length > 0))
+  const mutationError = ops.error ?? hide.error ?? unhide.error
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 pt-7 pb-12">
+    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 pt-7 pb-12 sm:px-6">
       <div className="flex flex-col gap-2.5">
-        <nav aria-label="Breadcrumb" className="flex flex-wrap gap-2 text-[13px] text-muted">
+        <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
           <Link to="/plan" className="text-muted">{state?.plan.name ?? 'Plan'}</Link>
+          <span aria-hidden="true">/</span>
+          <Link to="/explore" className="text-muted">Explore</Link>
           <span aria-hidden="true">/</span>
           <span>{termLabel(term)}</span>
           <span aria-hidden="true">/</span>
-          <span className="font-semibold text-ink">{data?.slot_label ?? slotId}</span>
+          <span aria-current="page" className="font-semibold text-ink">{slotLabel}</span>
         </nav>
-        <h1 className="m-0 max-w-3xl text-[34px] leading-tight font-extrabold tracking-tight">
+        <h1 className="m-0 max-w-3xl text-[28px] leading-tight font-extrabold tracking-tight sm:text-[34px]">
           {data ? `Options for ${data.slot_label}` : 'Finding options…'}
         </h1>
         {data && (
           <p className="m-0 max-w-3xl text-base text-muted">
-            {data.eligible_count} courses would satisfy this slot and fit your prerequisites.
+            {data.eligible_count} {data.eligible_count === 1 ? 'course' : 'courses'} would satisfy this slot in{' '}
+            {termLabel(term, true)} and fit your prerequisites.
           </p>
+        )}
+        {slots.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor={switchId} className="text-[13px] font-semibold">Open slot</label>
+            <select
+              id={switchId}
+              value={here?.id ?? ''}
+              onChange={(e) => {
+                const p = slots.find((s) => s.id === e.target.value)
+                if (p) navigate(slotHref(p))
+              }}
+              className="h-11 max-w-full min-w-0 rounded-md border border-[#C3C9BC] bg-white px-2 sm:h-9"
+            >
+              {!here && <option value="">{termLabel(term)} · {slotLabel}</option>}
+              {slots.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {termLabel(p.term)} · {p.slot_label ?? p.slot} · {p.credits} cr
+                </option>
+              ))}
+            </select>
+            <Link to="/explore" className="inline-flex min-h-11 items-center text-[13px] font-semibold sm:min-h-0">
+              All open slots
+            </Link>
+          </div>
         )}
       </div>
 
-      {error && <p className="text-accent">{error.message}</p>}
-      {ops.error && <p className="text-accent">{ops.error.message}</p>}
+      {error && <p className="m-0 text-accent">{error.message}</p>}
+      {mutationError && <p className="m-0 text-accent">{mutationError.message}</p>}
 
       <div className="flex flex-wrap items-start gap-6">
         <main className="flex min-w-0 flex-[999_1_600px] flex-col gap-4">
-          {isLoading && <p className="text-muted">Loading…</p>}
+          {data?.ordering && visible.length > 0 && (
+            <p className="m-0 text-[13px] text-muted">
+              {data.ordering}.{!ranked && ' This isn’t a personal recommendation yet.'}
+            </p>
+          )}
+          <div role="status" aria-live="polite">
+            {showLast && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-chip px-3.5 py-2">
+                <span className="min-w-0 flex-1">
+                  Hidden <span className="font-mono font-semibold">{lastHidden.code}</span>. Saved to your{' '}
+                  <Link to="/profile">profile</Link> so it stays out of your options.
+                </span>
+                <Button
+                  variant="quiet"
+                  className={`${touch} font-semibold`}
+                  aria-label={`Undo hiding ${lastHidden.code}`}
+                  disabled={hiding.includes(lastHidden.code) || undoing.includes(lastHidden.code)}
+                  onClick={() => undo(lastHidden.code)}
+                >
+                  Undo
+                </Button>
+              </div>
+            )}
+          </div>
+          {isLoading && <p className="m-0 text-muted">Loading…</p>}
+          {data && visible.length === 0 && (
+            <p className="m-0 text-muted">
+              {hidden.length > 0
+                ? 'No other courses fit this slot. Bring back one you hid below.'
+                : `Nothing fits this slot in ${termLabel(term, true)} yet. A course may need prerequisites you won’t have by then, or may not be offered that season.`}
+            </p>
+          )}
           {visible.map((c) => (
-            <CandidateCard
-              key={c.course.code}
-              c={c}
-              term={term}
-              onPick={() => pick(c.course.code)}
-              onHide={() => setHidden((h) => [...h, c.course.code])}
-            />
+            <CandidateCard key={c.course.code} c={c} term={term} onPick={() => pick(c.course.code)} onHide={() => hideCourse(c.course)} />
           ))}
           {data && data.eligible_count > limit && (
-            <Button variant="link" className="self-start" onClick={() => setLimit(50)}>
+            <Button variant="link" className={`${touch} self-start`} onClick={() => setLimit(50)}>
               See more of the {data.eligible_count} eligible courses
             </Button>
           )}
-        </main>
-
-        <aside aria-label="How these were ranked" className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
-          {data && data.factors.length > 0 && (
-            <section className="flex flex-col gap-3.5 rounded-xl border border-line bg-white p-4">
-              <SectionLabel>What shaped the ranking</SectionLabel>
-              {data.factors.map((f) => (
-                <div key={f.label} className="flex flex-col gap-1">
-                  <div className="flex justify-between gap-2">
-                    <span className={`font-semibold ${f.strength === 'not used' ? 'text-muted' : ''}`}>{f.label}</span>
-                    <span className="font-mono text-[12px]">{f.strength}</span>
-                  </div>
-                  {f.strength !== 'not used' && (
-                    <div className="h-1.5 rounded bg-chip">
-                      <div
-                        className="h-1.5 rounded bg-ink"
-                        style={{ width: f.strength === 'strong' ? '90%' : f.strength === 'medium' ? '50%' : '25%' }}
-                      />
-                    </div>
-                  )}
-                  <span className="text-[12.5px] text-muted">{f.basis}</span>
-                </div>
-              ))}
-              <Link to="/profile" className="font-semibold">Edit what the advisor knows</Link>
+          {olderHidden.length > 0 && (
+            <section aria-label="Courses you marked not for me" className="flex flex-col gap-1 rounded-xl border border-line p-4">
+              <SectionLabel>Not for me · {olderHidden.length}</SectionLabel>
+              <ul className="m-0 flex list-none flex-col p-0">
+                {olderHidden.map((h) => (
+                  <HiddenRow key={h.course.code} course={h.course} busy={undoing.includes(h.course.code)} onUndo={() => undo(h.course.code)} />
+                ))}
+              </ul>
             </section>
           )}
-          <section className="flex flex-col gap-2.5 rounded-xl border border-line p-4">
-            <SectionLabel>Sources</SectionLabel>
-            <div className="flex flex-col">
-              <a href="https://classes.cornell.edu/" target="_blank" rel="noreferrer" className="font-semibold">Cornell Class Roster</a>
-              <span className="text-[12.5px] text-muted">Official · cached snapshot</span>
-            </div>
-            <div className="flex flex-col">
-              <a href="https://www.cs.cornell.edu/undergrad" target="_blank" rel="noreferrer" className="font-semibold">CS degree requirements</a>
-              <span className="text-[12.5px] text-muted">Official · decides what counts for this slot</span>
-            </div>
-            <div className="flex flex-col">
-              <a href="https://www.cureviews.org/" target="_blank" rel="noreferrer" className="font-semibold">CUReviews</a>
-              <span className="text-[12.5px] text-muted">Student opinion · shown separately</span>
-            </div>
-          </section>
-        </aside>
+        </main>
+        <Sidebar data={data} />
       </div>
     </div>
   )
+}
+
+export default function ExplorePage() {
+  const { slotId } = useParams()
+  const [params] = useSearchParams()
+  const { data: state } = usePlan()
+  const term = params.get('term') ?? ''
+  const placementId = params.get('placement')
+
+  if (!slotId) return <SlotIndex />
+  if (!term) {
+    if (!state) return <div className="p-10 text-muted">Loading…</div>
+    const p = openSlots(state).find((s) => s.id === placementId || s.slot === slotId)
+    return <Navigate to={p ? slotHref(p) : '/explore'} replace />
+  }
+  return <SlotOptions key={`${slotId}|${term}|${placementId}`} slotId={slotId} term={term} placementId={placementId} />
 }

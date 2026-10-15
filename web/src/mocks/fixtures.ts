@@ -294,5 +294,7 @@ export function candidates(slot: string, term: string): SlotCandidates {
       { label: 'Likes project-heavy courses', strength: 'medium', basis: 'My guess from 2 conversations' },
       { label: 'Instructor ratings', strength: 'not used', basis: 'Spring ’28 instructors aren’t announced' },
     ],
+    ordering: 'Ranked by what you’ve told the advisor',
+    hidden: [],
   }
 }

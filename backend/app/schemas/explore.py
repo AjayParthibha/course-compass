@@ -40,6 +40,13 @@ class RankingFactor(Schema):
     basis: str
 
 
+class HiddenCourse(Schema):
+    """An eligible course left out because the student marked it "not for me"."""
+
+    course: CourseSummary
+    fact_id: int
+
+
 class SlotCandidates(Schema):
     slot_id: str
     slot_label: str
@@ -47,3 +54,5 @@ class SlotCandidates(Schema):
     eligible_count: int
     candidates: list[Candidate]
     factors: list[RankingFactor] = []
+    ordering: str = ""
+    hidden: list[HiddenCourse] = []
