@@ -328,6 +328,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{code}/not-interested": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark Not Interested
+         * @description Remember that the student doesn't want this course suggested. Saved as a stated
+         *     profile fact, so it shows on the profile page and can be removed there.
+         */
+        put: operations["mark_not_interested_api_courses__code__not_interested_put"];
+        post?: never;
+        /** Unmark Not Interested */
+        delete: operations["unmark_not_interested_api_courses__code__not_interested_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses": {
         parameters: {
             query?: never;
@@ -707,6 +729,15 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HiddenCourse
+         * @description An eligible course left out because the student marked it "not for me".
+         */
+        HiddenCourse: {
+            course: components["schemas"]["CourseSummary"];
+            /** Fact Id */
+            fact_id: number;
         };
         /** Issue */
         Issue: {
@@ -1155,6 +1186,16 @@ export interface components {
              * @default []
              */
             factors: components["schemas"]["RankingFactor"][];
+            /**
+             * Ordering
+             * @default
+             */
+            ordering: string;
+            /**
+             * Hidden
+             * @default []
+             */
+            hidden: components["schemas"]["HiddenCourse"][];
         };
         /** Student */
         Student: {
@@ -1943,6 +1984,70 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SlotCandidates"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_not_interested_api_courses__code__not_interested_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileFact"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unmark_not_interested_api_courses__code__not_interested_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
