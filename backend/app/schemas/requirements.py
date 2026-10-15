@@ -15,6 +15,8 @@ class CourseFilter(Schema):
     attributes_any: list[str] = []
     min_credits: int | None = None
     exclude: list[str] = []
+    # e.g. "FWS:" — every first-year writing seminar's roster title starts with it
+    title_prefix: str | None = None
 
 
 class Requirement(Schema):

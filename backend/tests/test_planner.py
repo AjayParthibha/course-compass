@@ -1,11 +1,12 @@
 from app.catalog.prereq_parse import parse
 from app.catalog.store import Catalog
-from app.planner.audit import audit
+from app.planner.audit import audit, matches_filter
 from app.planner.ops import apply_ops
 from app.planner.validate import validate
 from app.requirements.loader import get_program
 from app.schemas.courses import AllOf, AnyOf, CourseReq, Flag
 from app.schemas.plans import MoveOp, Placement
+from app.schemas.requirements import CourseFilter
 
 TERMS = ["FA24", "SP25", "FA25", "SP26", "FA26", "SP27"]
 
@@ -140,6 +141,12 @@ def test_audit_counts_courses(catalog):
     assert by_id["ls"].status == "planned"
     assert by_id["core"].status == "missing"
     assert not result.complete
+
+
+def test_title_prefix_filter(catalog):
+    fws = catalog.get("GOVT 1111").model_copy(update={"title": "FWS: Politics and Writing"})
+    assert matches_filter(fws, CourseFilter(title_prefix="FWS:"))
+    assert not matches_filter(catalog.get("GOVT 1111"), CourseFilter(title_prefix="FWS:"))
 
 
 def test_move_op(catalog):

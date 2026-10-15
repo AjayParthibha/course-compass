@@ -32,6 +32,8 @@ def matches_filter(course: Course, f: CourseFilter) -> bool:
         return False
     if f.attributes_any and not set(f.attributes_any) & set(course.attributes):
         return False
+    if f.title_prefix and not course.title.startswith(f.title_prefix):
+        return False
     return True
 
 

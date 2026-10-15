@@ -31,9 +31,10 @@ requirements:
 
   - id: fws
     label: First-year writing seminars
-    kind: flag_only
+    kind: filter
+    filter: {title_prefix: "FWS:"}
     count: 2
-    notes: FWS courses don't share a roster attribute yet; confirm by hand.
+    notes: Matched by roster title; every FWS title starts with "FWS:".
 
   - id: ls
     label: Liberal studies

@@ -7,5 +7,6 @@ verified: false
 requirements:
   - id: as-fws
     label: First-year writing seminars
-    kind: flag_only
+    kind: filter
+    filter: {title_prefix: "FWS:"}
     count: 2
