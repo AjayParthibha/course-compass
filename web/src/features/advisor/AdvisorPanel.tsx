@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router'
 import Message from './Message'
+import { latestProposalId } from './proposalState'
 import { useAdvisor } from './store'
 import { useChat } from './useChat'
 import { Button } from '../../ui'
@@ -12,6 +13,7 @@ export default function AdvisorPanel() {
   const { send } = useChat()
   const scroller = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
+  const latestId = useMemo(() => latestProposalId(turns.flatMap((t) => t.events)), [turns])
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight })
@@ -55,6 +57,7 @@ export default function AdvisorPanel() {
             live={streaming && i === turns.length - 1}
             canAnswer={!streaming && i === turns.length - 1}
             onAnswer={send}
+            latestProposalId={latestId}
           />
         ))}
       </div>
