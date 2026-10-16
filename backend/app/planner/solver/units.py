@@ -7,7 +7,7 @@ precomputed from the catalog and the program, so the model never touches either.
 from dataclasses import dataclass
 
 from app.catalog.store import Catalog
-from app.planner.audit import matches
+from app.planner.audit import matches, subjects_of
 from app.schemas.courses import PrereqExpr
 from app.schemas.plans import Placement
 from app.schemas.requirements import Program
@@ -31,6 +31,10 @@ class Unit:
     seasons: tuple[str, ...]
     # requirement leaves (courses / filter) this unit may count toward
     eligible: tuple[str, ...]
+    # its subject and its cross-listings' (for same-subject rules)
+    subjects: frozenset[str] = frozenset()
+    # subjects it is cross-listed with (for caps like "at most one CS cross-listing")
+    cross_listed: frozenset[str] = frozenset()
 
     @property
     def fixed(self) -> bool:
@@ -78,6 +82,8 @@ def build_units(placements: list[Placement], catalog: Catalog, program: Program)
                 dup_key=min(catalog.equivalents(course.code)),
                 seasons=tuple(course.typical_seasons),
                 eligible=tuple(r.id for r in leaves if matches(course, r, catalog)),
+                subjects=frozenset(subjects_of(course)),
+                cross_listed=frozenset(code.split()[0] for code in course.cross_listed),
             )
         )
     return units

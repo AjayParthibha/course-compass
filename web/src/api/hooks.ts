@@ -9,7 +9,10 @@ export const keys = {
   course: (code: string) => ['course', code] as const,
   proposal: (id: number) => ['proposal', id] as const,
   proposalPreview: (id: number) => ['proposal', id, 'preview'] as const,
-  candidates: (slot: string, term: string, limit: number) => ['candidates', slot, term, limit] as const,
+  candidates: (slot: string, term: string, limit: number, subject?: string | null) =>
+    ['candidates', slot, term, limit, subject ?? null] as const,
+  // under 'candidates' so whatever refreshes the lists refreshes the areas too
+  areas: (slot: string, term: string, placement: string | null) => ['candidates', 'areas', slot, term, placement] as const,
   conversation: ['conversation', 'latest'] as const,
 }
 
@@ -115,17 +118,36 @@ export function useProfile() {
   return useQuery({ queryKey: keys.profile, queryFn: () => unwrap(api.GET('/api/profile')) })
 }
 
-export function useCandidates(slot: string, term: string, limit = 3) {
+export function useCandidates(
+  slot: string,
+  term: string,
+  limit = 3,
+  { subject, placement }: { subject?: string | null; placement?: string | null } = {},
+) {
   return useQuery({
-    queryKey: keys.candidates(slot, term, limit),
+    queryKey: keys.candidates(slot, term, limit, subject),
     queryFn: () =>
       unwrap(
         api.GET('/api/slots/{slot_id}/candidates', {
-          params: { path: { slot_id: slot }, query: { term, limit } },
+          params: { path: { slot_id: slot }, query: { term, limit, subject, placement } },
         }),
       ),
     enabled: !!slot && !!term,
     placeholderData: keepPreviousData,
+  })
+}
+
+/** Subjects a same-subject slot (the external specialization) could be filled from. */
+export function useAreas(slot: string, term: string, placement: string | null, enabled = true) {
+  return useQuery({
+    queryKey: keys.areas(slot, term, placement),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/slots/{slot_id}/areas', {
+          params: { path: { slot_id: slot }, query: { term, placement } },
+        }),
+      ),
+    enabled: enabled && !!slot && !!term,
   })
 }
 

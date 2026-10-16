@@ -334,6 +334,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/slots/{slot_id}/areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Areas
+         * @description Subjects a same-subject rule (the external specialization) could be filled from,
+         *     best fit first: the one the plan already uses, then ones with courses ready to take,
+         *     then ones that build on courses in the plan.
+         */
+        get: operations["areas_api_slots__slot_id__areas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/slots/{slot_id}/candidates": {
         parameters: {
             query?: never;
@@ -343,8 +365,9 @@ export interface paths {
         };
         /**
          * Candidates
-         * @description Eligible courses for a requirement slot. Ranking is a placeholder until the
-         *     profile-aware recommender lands (Track C); reasons are empty for now.
+         * @description Eligible courses for a requirement slot, optionally narrowed to one subject (with
+         *     the courses there that can't go in this term, and why). Ranking is a placeholder until
+         *     the profile-aware recommender lands (Track C); reasons are empty for now.
          */
         get: operations["candidates_api_slots__slot_id__candidates_get"];
         put?: never;
@@ -538,6 +561,35 @@ export interface components {
             /** Items */
             items: (components["schemas"]["CourseReq"] | components["schemas"]["AllOf"] | components["schemas"]["AnyOf"] | components["schemas"]["Flag"])[];
         };
+        /**
+         * Area
+         * @description One subject a same-subject rule could be filled from.
+         */
+        Area: {
+            /** Subject */
+            subject: string;
+            /** Name */
+            name: string;
+            /** Ready */
+            ready: number;
+            /** Blocked */
+            blocked: number;
+            /**
+             * Builds On
+             * @default []
+             */
+            builds_on: string[];
+            /**
+             * Counted
+             * @default []
+             */
+            counted: string[];
+            /**
+             * Sample
+             * @default []
+             */
+            sample: components["schemas"]["CourseSummary"][];
+        };
         /** AuditResult */
         AuditResult: {
             /** Complete */
@@ -550,6 +602,15 @@ export interface components {
              */
             unassigned: string[];
         };
+        /**
+         * BlockedCourse
+         * @description A course that fits the rule but can't go in this term, and why.
+         */
+        BlockedCourse: {
+            course: components["schemas"]["CourseSummary"];
+            /** Reason */
+            reason: string;
+        };
         /** Candidate */
         Candidate: {
             course: components["schemas"]["CourseSummary"];
@@ -559,6 +620,11 @@ export interface components {
             reasons: components["schemas"]["Reason"][];
             official: components["schemas"]["OfficialInfo"];
             reviews: components["schemas"]["ReviewSummary"] | null;
+            /**
+             * Capped Cross Listings
+             * @default []
+             */
+            capped_cross_listings: string[];
         };
         /** ChatMessage */
         ChatMessage: {
@@ -1169,7 +1235,11 @@ export interface components {
             /** Reason */
             reason: string;
         };
-        /** RemoveOp */
+        /**
+         * RemoveOp
+         * @description Take a placement out of the plan. A course chosen for a requirement slot comes out
+         *     and leaves the slot open again; removing an open slot drops it.
+         */
         "RemoveOp-Input": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1179,7 +1249,11 @@ export interface components {
             /** Placement Id */
             placement_id: string;
         };
-        /** RemoveOp */
+        /**
+         * RemoveOp
+         * @description Take a placement out of the plan. A course chosen for a requirement slot comes out
+         *     and leaves the slot open again; removing an open slot drops it.
+         */
         "RemoveOp-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1255,6 +1329,33 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** SlotAreas */
+        SlotAreas: {
+            /** Slot Id */
+            slot_id: string;
+            /** Slot Label */
+            slot_label: string;
+            /** Term */
+            term: string;
+            /** Needed */
+            needed: number;
+            /** Chosen */
+            chosen: string | null;
+            /**
+             * Counted
+             * @default []
+             */
+            counted: components["schemas"]["CourseSummary"][];
+            /**
+             * Caps
+             * @default {}
+             */
+            caps: {
+                [key: string]: number;
+            };
+            /** Areas */
+            areas: components["schemas"]["Area"][];
+        };
         /** SlotCandidates */
         SlotCandidates: {
             /** Slot Id */
@@ -1282,6 +1383,18 @@ export interface components {
              * @default []
              */
             hidden: components["schemas"]["HiddenCourse"][];
+            /**
+             * Same Subject
+             * @default false
+             */
+            same_subject: boolean;
+            /** Subject */
+            subject: string | null;
+            /**
+             * Blocked
+             * @default []
+             */
+            blocked: components["schemas"]["BlockedCourse"][];
         };
         /** Student */
         Student: {
@@ -2082,11 +2195,49 @@ export interface operations {
             };
         };
     };
+    areas_api_slots__slot_id__areas_get: {
+        parameters: {
+            query: {
+                term: string;
+                placement?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                slot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotAreas"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     candidates_api_slots__slot_id__candidates_get: {
         parameters: {
             query: {
                 term: string;
                 limit?: number;
+                subject?: string | null;
+                placement?: string | null;
             };
             header?: {
                 authorization?: string | null;

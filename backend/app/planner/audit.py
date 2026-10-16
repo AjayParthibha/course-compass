@@ -5,6 +5,8 @@ first and broad filters after. Good enough to drive the UI; Track A swaps this
 for the CP-SAT assignment model, which handles double-counting properly.
 """
 
+from collections import Counter
+
 from app.catalog.store import Catalog
 from app.schemas.courses import Course
 from app.schemas.plans import AuditResult, Placement, RequirementStatus
@@ -19,9 +21,41 @@ def matches(course: Course, req: Requirement, catalog: Catalog) -> bool:
     return False
 
 
+def subjects_of(course: Course) -> set[str]:
+    """Its own subject and its cross-listings': CS 2110 is also ENGRD 2110."""
+    return {course.subject, *(code.split()[0] for code in course.cross_listed)}
+
+
+def cross_listed_with(course: Course, subject: str) -> bool:
+    return any(code.split()[0] == subject for code in course.cross_listed)
+
+
+def within_limits(options: list[tuple[Placement, Course]], req: Requirement):
+    """Drop courses past the rule's cap on cross-listings, keeping plan order."""
+    used: Counter[str] = Counter()
+    out = []
+    for p, course in options:
+        crossed = [s for s in req.max_cross_listed if cross_listed_with(course, s)]
+        if any(used[s] >= req.max_cross_listed[s] for s in crossed):
+            continue
+        used.update(crossed)
+        out.append((p, course))
+    return out
+
+
+def best_subject(options: list[tuple[Placement, Course]], req: Requirement):
+    """For a same-subject rule, the courses from the subject that covers the most of it;
+    ties go to the subject that appears first in the plan."""
+    best: list[tuple[Placement, Course]] = []
+    for subject in dict.fromkeys(s for _, c in options for s in sorted(subjects_of(c))):
+        group = within_limits([(p, c) for p, c in options if subject in subjects_of(c)], req)
+        if len(group) > len(best):
+            best = group
+    return best
+
+
 def matches_filter(course: Course, f: CourseFilter) -> bool:
-    # a cross-listing counts too: CS 2110 is also ENGRD 2110
-    subjects = {course.subject, *(code.split()[0] for code in course.cross_listed)}
+    subjects = subjects_of(course)
     if f.subjects and not subjects & set(f.subjects):
         return False
     if course.subject in f.exclude_subjects or course.code in f.exclude:
@@ -35,6 +69,8 @@ def matches_filter(course: Course, f: CourseFilter) -> bool:
     if f.attributes_any and not set(f.attributes_any) & set(course.attributes):
         return False
     if f.title_prefix and not course.title.startswith(f.title_prefix):
+        return False
+    if f.exclude_titles and any(t.lower() in course.title.lower() for t in f.exclude_titles):
         return False
     return True
 
@@ -69,9 +105,8 @@ def audit(placements: list[Placement], program: Program, catalog: Catalog) -> Au
 
     for req in leaves:
         target = needed(req)
+        options = []
         for p in placements:
-            if len(filled[req.id]) >= target and _credits(filled[req.id]) >= (req.credits or 0):
-                break
             if not p.course or p in filled[req.id]:
                 continue
             course = catalog.get(p.course)
@@ -80,6 +115,11 @@ def audit(placements: list[Placement], program: Program, catalog: Catalog) -> Au
             prior = used_by.get(p.id, set())
             if prior and not prior <= set(req.double_count):
                 continue
+            options.append((p, course))
+        options = best_subject(options, req) if req.same_subject else within_limits(options, req)
+        for p, _ in options:
+            if len(filled[req.id]) >= target and _credits(filled[req.id]) >= (req.credits or 0):
+                break
             filled[req.id].append(p)
             used_by.setdefault(p.id, set()).add(req.id)
 

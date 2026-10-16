@@ -19,11 +19,19 @@ def season(term: str) -> str:
 
 class Catalog:
     def __init__(
-        self, courses: list[Course], prereq_equivalents: dict[str, list[str]] | None = None
+        self,
+        courses: list[Course],
+        prereq_equivalents: dict[str, list[str]] | None = None,
+        subject_names: dict[str, str] | None = None,
     ):
         self.courses = {c.code: c for c in courses}
         # course -> other courses whose prerequisites it also satisfies ("or equivalent")
         self.prereq_equivalents = prereq_equivalents or {}
+        # ORIE -> Operations Research & Information Engineering
+        self.subject_names = subject_names or {}
+
+    def subject_name(self, subject: str) -> str:
+        return self.subject_names.get(subject, subject)
 
     def get(self, code: str) -> Course | None:
         return self.courses.get(normalize_code(code))
@@ -99,7 +107,9 @@ class Catalog:
         equivalents = {}
         if equivalents_file and equivalents_file.exists():
             equivalents = yaml.safe_load(equivalents_file.read_text()) or {}
-        return cls(courses, equivalents)
+        names_file = snapshot_dir / "subjects.json"
+        names = json.loads(names_file.read_text()) if names_file.exists() else {}
+        return cls(courses, equivalents, names)
 
 
 def normalize_code(code: str) -> str:

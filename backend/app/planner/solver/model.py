@@ -191,6 +191,9 @@ class PlanModel:
                     if r2 not in reqs[r1].double_count and r1 not in reqs[r2].double_count:
                         self.m.Add(self.a[(u.id, r1)] + self.a[(u.id, r2)] <= 1)
 
+        for rid, counted in self._counted.items():
+            self._subject_rules(reqs[rid], counted)
+
         tops = []
         for top in (r for s in self.program.sets for r in s.requirements):
             lit = self._req_sat(top)
@@ -206,6 +209,24 @@ class PlanModel:
             # won't trade half of an all_of for some other leaf
             weight = len(self._leaf_sat) + 1
             self.m.Maximize(weight * sum(tops) + sum(self._leaf_sat))
+
+    def _subject_rules(self, r: Requirement, counted: list[tuple[Unit, cp_model.IntVar]]):
+        for subject, cap in r.max_cross_listed.items():
+            crossed = [a for u, a in counted if subject in u.cross_listed]
+            if len(crossed) > cap:
+                self.m.Add(sum(crossed) <= cap)
+        if not r.same_subject:
+            return
+        # pick one subject for the rule; every course counted must carry it (an open
+        # slot has no course yet, so it fits whichever subject is picked)
+        courses = [(u, a) for u, a in counted if u.course is not None]
+        subjects = sorted({s for u, _ in courses for s in u.subjects})
+        if len(subjects) <= 1:
+            return
+        pick = {s: self.m.NewBoolVar(f"subject[{r.id},{s}]") for s in subjects}
+        self.m.AddAtMostOne(pick.values())
+        for u, a in courses:
+            self.m.AddBoolOr([pick[s] for s in sorted(u.subjects)]).OnlyEnforceIf(a)
 
     def _req_sat(self, r: Requirement) -> Lit:
         if r.kind == "flag_only":

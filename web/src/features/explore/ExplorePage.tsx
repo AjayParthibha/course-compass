@@ -7,6 +7,7 @@ import { cureviewsUrl } from '../../ui/links'
 import { termLabel } from '../../ui/terms'
 import { useNotForMe } from './notForMe'
 import SlotIndex from './SlotIndex'
+import Specialization from './Specialization'
 import { openSlots, slotHref } from './slots'
 
 type CourseSummary = Candidate['course']
@@ -234,7 +235,7 @@ function SlotOptions({ slotId, term: urlTerm, placementId }: { slotId: string; t
             <Link to="/explore" className="font-semibold">See open slots</Link>
           </p>
         )}
-        {data && (
+        {data && !data.same_subject && (
           <p className="m-0 max-w-3xl text-base text-muted">
             {data.eligible_count} {data.eligible_count === 1 ? 'course' : 'courses'} would satisfy this slot in{' '}
             {termLabel(term, true)} and fit your prerequisites.
@@ -271,7 +272,7 @@ function SlotOptions({ slotId, term: urlTerm, placementId }: { slotId: string; t
 
       <div className="flex flex-wrap items-start gap-6">
         <main className="flex min-w-0 flex-[999_1_600px] flex-col gap-4">
-          {data?.ordering && visible.length > 0 && (
+          {data?.ordering && !data.same_subject && visible.length > 0 && (
             <p className="m-0 text-[13px] text-muted">
               {data.ordering}.{!ranked && ' This isn’t a personal recommendation yet.'}
             </p>
@@ -296,14 +297,26 @@ function SlotOptions({ slotId, term: urlTerm, placementId }: { slotId: string; t
             )}
           </div>
           {isLoading && <p className="m-0 text-muted">Loading…</p>}
-          {data && visible.length === 0 && (
+          {data?.same_subject && (
+            <Specialization
+              slotId={slotId}
+              term={term}
+              placementId={placementId}
+              state={state}
+              canPick={!stale && !ops.isPending}
+              onPick={pick}
+              onHide={hideCourse}
+              hiding={hiding}
+            />
+          )}
+          {data && !data.same_subject && visible.length === 0 && (
             <p className="m-0 text-muted">
               {hidden.length > 0
                 ? 'No other courses fit this slot. Bring back one you hid below.'
                 : `Nothing fits this slot in ${termLabel(term, true)} yet. A course may need prerequisites you won’t have by then, or may not be offered that season.`}
             </p>
           )}
-          {visible.map((c) => (
+          {!data?.same_subject && visible.map((c) => (
             <CandidateCard
               key={c.course.code}
               c={c}
@@ -314,12 +327,12 @@ function SlotOptions({ slotId, term: urlTerm, placementId }: { slotId: string; t
             />
           ))}
           {isPlaceholderData && <p className="m-0 text-muted">Loading more…</p>}
-          {data && !expanded && data.eligible_count > data.candidates.length && (
+          {data && !data.same_subject && !expanded && data.eligible_count > data.candidates.length && (
             <Button variant="link" className={`${touch} self-start`} onClick={() => setLimit(MORE)}>
               See more of the {data.eligible_count} eligible courses
             </Button>
           )}
-          {data && expanded && !isPlaceholderData && data.eligible_count > data.candidates.length && (
+          {data && !data.same_subject && expanded && !isPlaceholderData && data.eligible_count > data.candidates.length && (
             <p className="m-0 text-[13px] text-muted">
               Showing the first {data.candidates.length} of {data.eligible_count}.
             </p>
