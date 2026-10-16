@@ -17,6 +17,9 @@ class CourseFilter(Schema):
     exclude: list[str] = []
     # e.g. "FWS:" — every first-year writing seminar's roster title starts with it
     title_prefix: str | None = None
+    # leave out courses whose title contains any of these (case-insensitive), e.g.
+    # "Independent Study" for rules that don't take research or independent study credit
+    exclude_titles: list[str] = []
 
 
 class Requirement(Schema):
@@ -35,6 +38,10 @@ class Requirement(Schema):
     # where the starter plan puts open slots for it: spread to balance load, or in the
     # earliest remaining terms (first-year writing seminars)
     seed: Literal["spread", "earliest"] = "spread"
+    # every course counted here shares one subject prefix (a cross-listing's counts)
+    same_subject: bool = False
+    # at most this many counted courses may be cross-listed with a subject, e.g. {CS: 1}
+    max_cross_listed: dict[str, int] = {}
 
     @model_validator(mode="after")
     def check_shape(self):

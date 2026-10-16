@@ -79,8 +79,36 @@ requirements:
   - id: ext
     label: External specialization
     kind: filter
-    filter: {min_level: 3000, exclude_subjects: [CS], min_credits: 3}
+    filter:
+      min_level: 3000
+      exclude_subjects: [CS]
+      min_credits: 3
+      # no research, independent study, project team or teaching credit
+      exclude_titles:
+        - Independent Study
+        - Independent Research
+        - Individual Study
+        - Undergraduate Research
+        - Supervised Research
+        - Directed Research
+        - Directed Study
+        - Directed Reading
+        - Supervised Reading
+        - Group Study
+        - Honors Research
+        - Honors Thesis
+        - Thesis Research
+        - Dissertation
+        - Project Team
+        - Special Project
+        - Teaching in
+        - Teaching Assistant
+        - Teaching Experience
+        - Supervised Teaching
+        - Internship
     count: 3
+    same_subject: true
+    max_cross_listed: {CS: 1}
     notes: >-
       The three courses must share a prefix or an advisor-approved topic; at most one may be
       cross-listed with CS; no research, independent study, project team, PE or teaching credit.

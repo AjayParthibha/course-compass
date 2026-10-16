@@ -272,7 +272,7 @@ export default function Inspector({ state }: { state: PlanState }) {
               requestAnimationFrame(() => document.getElementById(FOCUS_FALLBACK_ID)?.focus())
             }}
           >
-            Remove from plan
+            {placement.slot ? 'Remove course, keep the slot' : 'Remove from plan'}
           </Button>
         </div>
       )}

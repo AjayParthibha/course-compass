@@ -262,6 +262,7 @@ const candidate = (
     assumed: true,
   },
   reviews,
+  capped_cross_listings: [],
 })
 
 export function candidates(slot: string, term: string): SlotCandidates {
@@ -270,6 +271,9 @@ export function candidates(slot: string, term: string): SlotCandidates {
     slot_label: 'Technical elective',
     term,
     eligible_count: 63,
+    same_subject: false,
+    subject: null,
+    blocked: [],
     candidates: [
       candidate(
         1,

@@ -5,7 +5,10 @@
 
 `fetch` caches raw API responses under data/raw/ (the API asks for at most one
 request per second, so a full roster takes a few minutes). `build` turns the
-cached responses into a single courses.json.gz.
+cached responses into a single courses.json.gz. `subjects` saves each subject's
+full name (ORIE -> Operations Research and Engineering) next to a snapshot:
+
+    uv run python backend/scripts/ingest_roster.py subjects --out data/snapshots/2026-10-05
 """
 
 import argparse
@@ -110,6 +113,18 @@ def build(out_dir: Path) -> None:
     print(f"wrote {len(ordered)} courses to {out_dir}")
 
 
+def subjects(out_dir: Path) -> None:
+    """Subject names from every roster the snapshot was built from; the newest name wins."""
+    rosters = json.loads((out_dir / "meta.json").read_text())["rosters"]
+    names: dict[str, str] = {}
+    with httpx.Client() as client:
+        for roster in sorted(rosters, key=term_key):
+            for subj in get(client, "config/subjects.json", roster=roster)["data"]["subjects"]:
+                names[subj["value"]] = subj.get("descrformal") or subj.get("descr") or subj["value"]
+    (out_dir / "subjects.json").write_text(json.dumps(dict(sorted(names.items())), indent=1))
+    print(f"wrote {len(names)} subject names to {out_dir}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -119,9 +134,13 @@ if __name__ == "__main__":
     b.add_argument(
         "--out", type=Path, default=ROOT / "data" / "snapshots" / date.today().isoformat()
     )
+    s = sub.add_parser("subjects")
+    s.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
     if args.cmd == "fetch":
         fetch(args.rosters)
+    elif args.cmd == "subjects":
+        subjects(args.out)
     else:
         build(args.out)

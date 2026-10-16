@@ -32,6 +32,8 @@ class Candidate(Schema):
     reasons: list[Reason]
     official: OfficialInfo
     reviews: ReviewSummary | None = None
+    # subjects it's cross-listed with that the rule caps, e.g. ["CS"]
+    capped_cross_listings: list[str] = []
 
 
 class RankingFactor(Schema):
@@ -47,6 +49,13 @@ class HiddenCourse(Schema):
     fact_id: int
 
 
+class BlockedCourse(Schema):
+    """A course that fits the rule but can't go in this term, and why."""
+
+    course: CourseSummary
+    reason: str
+
+
 class SlotCandidates(Schema):
     slot_id: str
     slot_label: str
@@ -56,3 +65,32 @@ class SlotCandidates(Schema):
     factors: list[RankingFactor] = []
     ordering: str = ""
     hidden: list[HiddenCourse] = []
+    # the rule wants all its courses from one subject, so pick an area first
+    same_subject: bool = False
+    # set when the list is narrowed to one subject (same-subject rules)
+    subject: str | None = None
+    blocked: list[BlockedCourse] = []
+
+
+class Area(Schema):
+    """One subject a same-subject rule could be filled from."""
+
+    subject: str
+    name: str
+    ready: int  # courses you could take in the slot's term
+    blocked: int  # courses that fit but need a prerequisite or another season
+    builds_on: list[str] = []  # courses in your plan under this subject
+    counted: list[str] = []  # courses already counting toward the rule here
+    sample: list[CourseSummary] = []
+
+
+class SlotAreas(Schema):
+    slot_id: str
+    slot_label: str
+    term: str
+    needed: int
+    # the subject the plan already uses for this rule, if any
+    chosen: str | None = None
+    counted: list[CourseSummary] = []
+    caps: dict[str, int] = {}
+    areas: list[Area]

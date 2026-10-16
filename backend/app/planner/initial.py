@@ -4,11 +4,9 @@ spread across the remaining terms (or in the earliest ones for requirements mark
 
 from app.catalog.store import Catalog
 from app.planner.audit import audit, needed
-from app.planner.ops import new_id
+from app.planner.ops import SLOT_CREDITS, new_id
 from app.schemas.plans import Placement
 from app.schemas.requirements import Program
-
-SLOT_CREDITS = 3
 
 
 def seed_slots(
