@@ -7,7 +7,7 @@ const req = (id: string, status: RequirementStatus['status'], open_slots = 0): R
 })
 
 describe('summarizeRequirements', () => {
-  it('counts done, planned, open slots and requirements needing attention', () => {
+  it('counts done, planned, open slots and requirements to confirm', () => {
     const audit: AuditResult = {
       complete: false,
       unassigned: [],
@@ -17,19 +17,20 @@ describe('summarizeRequirements', () => {
       ],
     }
     const s = summarizeRequirements(audit)
-    expect(s.headline).toBe('2 of 6 requirements done')
-    expect(s.details).toEqual(['2 planned', '2 slots to fill', '1 to confirm', '1 needs attention'])
+    expect(s.headline).toBe('4 of 6 requirements on track')
+    expect(s.missing).toBe(1)
+    expect(s.details).toEqual(['2 met', '2 planned', '2 slots to fill', '1 to confirm'])
   })
 
   it('counts flagged requirements as ones to confirm, not problems', () => {
-    const audit: AuditResult = { complete: true, unassigned: [], requirements: [req('a', 'done'), req('f', 'flagged')] }
+    const audit: AuditResult = { complete: true, unassigned: [], requirements: [req('f', 'flagged')] }
     expect(summarizeRequirements(audit).details).toEqual(['1 to confirm'])
-    expect(summarizeRequirements(audit, 2).details).toEqual(['1 to confirm', '2 need attention'])
+    expect(summarizeRequirements(audit, 2).details).toEqual(['1 to confirm', '2 plan problems'])
   })
 
   it('leaves out empty categories', () => {
     const s = summarizeRequirements({ complete: true, unassigned: [], requirements: [req('a', 'done')] })
-    expect(s.headline).toBe('1 of 1 requirements done')
-    expect(s.details).toEqual([])
+    expect(s.headline).toBe('All requirements on track')
+    expect(s.details).toEqual(['1 met'])
   })
 })

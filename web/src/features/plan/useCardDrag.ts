@@ -26,6 +26,8 @@ type Session = {
   raf: number
   target: number | null
   cols: { left: number; right: number }[]
+  /** what scrolls the page up and down around the graph */
+  page: Element | Window
 }
 
 type Options = {
@@ -42,6 +44,15 @@ type Options = {
 const SETTLE_MS = 1200
 const RETURN_MS = 220
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+/** The nearest ancestor that scrolls vertically (the plan column on wide screens), or the window. */
+function pageScroller(el: Element): Element | Window {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const { overflowY } = getComputedStyle(p)
+    if ((overflowY === 'auto' || overflowY === 'scroll') && p.scrollHeight > p.clientHeight) return p
+  }
+  return window
+}
 
 /**
  * Pointer drag for planned cards. The dragged card is a visual copy only: positions always come from
@@ -114,9 +125,10 @@ export function useCardDrag(options: Options) {
       const target = targetAt(s)
       if (clone.current) clone.current.style.transform = `translate3d(${s.x - s.offX}px, ${s.y - s.offY}px, 0)`
       const dx = autoScrollStep(s.x, sr.left, sr.right)
-      const dy = autoScrollStep(s.y, 0, window.innerHeight, 40, 14)
+      const pr = s.page instanceof Element ? s.page.getBoundingClientRect() : { top: 0, bottom: window.innerHeight }
+      const dy = autoScrollStep(s.y, pr.top, pr.bottom, 40, 14)
       if (dx) sc.scrollLeft += dx
-      if (dy) window.scrollBy(0, dy)
+      if (dy) s.page.scrollBy(0, dy)
       if (target !== s.target) {
         s.target = target
         const d = dragRef.current
@@ -151,6 +163,7 @@ export function useCardDrag(options: Options) {
       s.offX = s.x0 - r.left
       s.offY = s.y0 - r.top
       s.phase = 'drag'
+      s.page = pageScroller(s.el)
       s.cols = Array.from(content.current.querySelectorAll<HTMLElement>('[data-term-col]')).map((el) => ({
         left: el.offsetLeft,
         right: el.offsetLeft + el.offsetWidth,
@@ -235,6 +248,7 @@ export function useCardDrag(options: Options) {
         raf: 0,
         target: null,
         cols: [],
+        page: window,
       }
       session.current = s
       if (e.pointerType === 'touch') {

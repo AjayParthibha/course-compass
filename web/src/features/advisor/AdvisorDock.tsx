@@ -14,10 +14,131 @@ function ChatIcon() {
   )
 }
 
-type PillProps = { unread: boolean; onOpen: () => void; ref: React.Ref<HTMLButtonElement> }
+// the plan keeps at least this much room beside the panel (matches max-w on the aside)
+const PLAN_ROOM = 480
+const MIN_WIDTH = 320
+const WIDTH_KEY = 'advisor-width'
 
-/** What's left of the advisor when it's collapsed: a small message box that opens it. */
-function AdvisorPill({ unread, onOpen, ref }: PillProps) {
+// the aside's own default, w-[min(380px,32vw)] min-w-[320px]
+const defaultWidth = () => Math.round(Math.max(MIN_WIDTH, Math.min(380, window.innerWidth * 0.32)))
+
+/** A col-resize cursor everywhere and no text selection while dragging; returns the undo. */
+function holdResizeCursor() {
+  const { cursor, userSelect } = document.body.style
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  return () => {
+    document.body.style.cursor = cursor
+    document.body.style.userSelect = userSelect
+  }
+}
+
+const clampWidth = (w: number) => Math.round(Math.max(MIN_WIDTH, Math.min(w, window.innerWidth - PLAN_ROOM)))
+
+/** The docked panel's width in px once the student has dragged it; null keeps the default. */
+function useSavedWidth() {
+  const [width, setWidth] = useState<number | null>(() => {
+    try {
+      const saved = Number(localStorage.getItem(WIDTH_KEY))
+      return saved > 0 ? saved : null
+    } catch {
+      return null
+    }
+  })
+  const save = (w: number | null) => {
+    setWidth(w)
+    try {
+      if (w === null) localStorage.removeItem(WIDTH_KEY)
+      else localStorage.setItem(WIDTH_KEY, String(w))
+    } catch {
+      // private windows can refuse storage; the width just won't be remembered
+    }
+  }
+  return [width, save] as const
+}
+
+/** Drag the panel's left edge to resize it; arrow keys work too, and a double-click resets it. */
+function ResizeHandle({ width, onResize }: { width: number | null; onResize: (w: number | null) => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const current = () => ref.current?.parentElement?.getBoundingClientRect().width ?? MIN_WIDTH
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const handle = e.currentTarget
+    handle.setPointerCapture(e.pointerId)
+    const startX = e.clientX
+    const startWidth = current()
+    const release = holdResizeCursor()
+    // the panel sits on the right, so dragging left makes it wider
+    const move = (ev: PointerEvent) => onResize(clampWidth(startWidth + startX - ev.clientX))
+    const end = () => {
+      release()
+      handle.removeEventListener('pointermove', move)
+      handle.removeEventListener('pointerup', end)
+      handle.removeEventListener('pointercancel', end)
+    }
+    handle.addEventListener('pointermove', move)
+    handle.addEventListener('pointerup', end)
+    handle.addEventListener('pointercancel', end)
+  }
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? 64 : 16
+    if (e.key === 'ArrowLeft') onResize(clampWidth(current() + step))
+    else if (e.key === 'ArrowRight') onResize(clampWidth(current() - step))
+    else if (e.key === 'Home') onResize(null)
+    else return
+    e.preventDefault()
+  }
+
+  return (
+    <div
+      ref={ref}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the advisor"
+      aria-valuemin={MIN_WIDTH}
+      aria-valuemax={Math.max(MIN_WIDTH, window.innerWidth - PLAN_ROOM)}
+      aria-valuenow={width ?? defaultWidth()}
+      title="Drag to resize · double-click to reset"
+      tabIndex={0}
+      onPointerDown={onPointerDown}
+      onDoubleClick={() => onResize(null)}
+      onKeyDown={onKeyDown}
+      className="group absolute inset-y-0 -left-1.5 z-10 w-3 cursor-col-resize touch-none focus-visible:outline-none"
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-transparent transition-colors group-hover:bg-line-strong group-focus-visible:bg-ink group-active:bg-ink"
+      />
+    </div>
+  )
+}
+
+type OpenerProps = { unread: boolean; onOpen: () => void; ref: React.Ref<HTMLButtonElement> }
+
+/** What's left of the docked advisor when it's collapsed: a slim full-height tab on the right edge that opens it. */
+function AdvisorRail({ unread, onOpen, ref }: OpenerProps) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onOpen}
+      aria-expanded={false}
+      aria-label={unread ? 'Open the advisor, new reply' : 'Open the advisor'}
+      title="Open the advisor"
+      className={`flex w-11 shrink-0 flex-col items-center gap-3 border-l border-line bg-paper py-4 transition-colors hover:bg-chip hover:text-ink focus-visible:-outline-offset-2! motion-safe:animate-sheet-fade ${unread ? 'text-ink' : 'text-muted'}`}
+    >
+      <ChatIcon />
+      <span className="text-[13px] font-semibold tracking-wide [writing-mode:vertical-rl]">Advisor</span>
+      {unread && <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-accent" />}
+    </button>
+  )
+}
+
+/** What's left of the drawer on narrow screens: a small message box that opens it. */
+function AdvisorPill({ unread, onOpen, ref }: OpenerProps) {
   return (
     <button
       ref={ref}
@@ -46,7 +167,10 @@ function AdvisorPill({ unread, onOpen, ref }: PillProps) {
   )
 }
 
-/** The advisor beside the plan: a docked panel on wide screens, a drawer from the right on narrow ones, and a small pill when collapsed. */
+/**
+ * The advisor beside the plan: a full-height panel docked on the right on wide screens (a slim tab on the
+ * right edge when collapsed), and a drawer from the right on narrow ones (a small pill when closed).
+ */
 export default function AdvisorDock() {
   const wide = useMediaQuery(WIDE_QUERY)
   const roomy = useMediaQuery(ROOMY)
@@ -60,6 +184,7 @@ export default function AdvisorDock() {
   // where focus goes back to after collapsing or closing, and whether opening was the student's click
   const opener = useRef<HTMLButtonElement>(null)
   const [focusOnOpen, setFocusOnOpen] = useState(false)
+  const [width, setWidth] = useSavedWidth()
 
   useEffect(() => setVisible(visible), [visible, setVisible])
   // the drawer belongs to narrow screens and to this page; don't let it reappear after a resize or a return visit
@@ -80,11 +205,16 @@ export default function AdvisorDock() {
 
   if (wide) {
     return sideOpen ? (
-      <aside aria-label="Advisor" className="sticky top-4 h-[calc(100vh-96px)] min-h-[520px] w-[min(380px,32vw)] min-w-[320px] shrink-0">
+      <aside
+        aria-label="Advisor"
+        style={width ? { width } : undefined}
+        className="relative flex w-[min(380px,32vw)] max-w-[calc(100vw-480px)] min-w-[320px] shrink-0 flex-col border-l border-line"
+      >
+        <ResizeHandle width={width} onResize={setWidth} />
         <AdvisorPanel variant="side" focusInput={focusOnOpen} onClose={() => close(() => setOpen(false))} />
       </aside>
     ) : (
-      <AdvisorPill ref={opener} unread={unread} onOpen={() => openByHand(() => setOpen(true))} />
+      <AdvisorRail ref={opener} unread={unread} onOpen={() => openByHand(() => setOpen(true))} />
     )
   }
 
