@@ -47,6 +47,9 @@ class AddOp(Schema):
 
 
 class RemoveOp(Schema):
+    """Take a placement out of the plan. A course chosen for a requirement slot comes out
+    and leaves the slot open again; removing an open slot drops it."""
+
     op: Literal["remove"] = "remove"
     placement_id: str
 

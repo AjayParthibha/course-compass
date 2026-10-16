@@ -4,6 +4,9 @@ import uuid
 from app.catalog.store import Catalog
 from app.schemas.plans import AddOp, LockOp, MoveOp, Placement, PlanOp, RemoveOp, ReplaceOp
 
+# an open slot's credits until a course fills it
+SLOT_CREDITS = 3
+
 
 class OpError(ValueError):
     pass
@@ -73,7 +76,7 @@ def apply_ops(
                 check_term(op.term)
                 if bool(op.course) == bool(op.slot):
                     raise OpError("add needs exactly one of course or slot")
-                credits = 3
+                credits = SLOT_CREDITS
                 if op.course:
                     course = catalog.get(op.course)
                     if course is None:
@@ -94,8 +97,13 @@ def apply_ops(
             case RemoveOp():
                 p = _find(by_id, op.placement_id)
                 check_lock(p)
-                result.remove(p)
-                del by_id[p.id]
+                if p.slot and p.course and p.status == "planned":
+                    # a course chosen for a requirement slot: take the course out, keep the slot
+                    p.course, p.title, p.credits = None, None, SLOT_CREDITS
+                    p.origin = origin
+                else:
+                    result.remove(p)
+                    del by_id[p.id]
             case MoveOp():
                 p = _find(by_id, op.placement_id)
                 if p.status == "completed":

@@ -12,6 +12,8 @@ export function describeMove(p: Placement, term: string) {
 }
 
 export function describeRemove(p: Placement) {
+  // a course chosen for a requirement slot comes out and leaves the slot open
+  if (p.slot && p.course) return `Removed ${p.course}. The ${termLabel(p.term)} ${p.slot_label ?? 'requirement'} slot is open again`
   return `Removed ${placementName(p)} from ${termLabel(p.term)}`
 }
 

@@ -428,3 +428,16 @@ def test_broad_electives_fill_after_specific_rules(catalog):
     }
     # listed first, but the catch-all waits so the social-science rule gets ECON 1110
     assert by_id["ss"].filled == ["ECON 1110"] and by_id["any"].filled == []
+
+
+def test_removing_a_course_from_a_slot_reopens_the_slot(catalog):
+    slot = Placement(id="s", term="SP27", slot="ls", slot_label="Liberal studies", credits=3)
+    filled = apply_ops([slot], [ReplaceOp(placement_id="s", course="ECON 1110")], catalog, TERMS)
+    assert filled[0].course == "ECON 1110" and filled[0].slot == "ls"
+
+    reopened = apply_ops(filled, [RemoveOp(placement_id="s")], catalog, TERMS)
+    assert len(reopened) == 1
+    assert reopened[0].course is None and reopened[0].slot == "ls" and reopened[0].credits == 3
+
+    # removing the open slot itself takes it out of the plan
+    assert apply_ops(reopened, [RemoveOp(placement_id="s")], catalog, TERMS) == []
