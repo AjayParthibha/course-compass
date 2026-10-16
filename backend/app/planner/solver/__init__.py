@@ -1,12 +1,27 @@
-"""CP-SAT planner. See docs in model.py; repair lands on top of `PlanModel`."""
+"""CP-SAT planner: model.py checks a plan, repair.py repairs or rebuilds one."""
 
 from app.catalog.store import Catalog
 from app.planner.solver.model import Options, PlanModel, RequirementMode, Result
+from app.planner.solver.repair import RequestError, rebuild, repair
+from app.planner.solver.types import AddWish, RepairRequest, RepairResult
 from app.planner.solver.units import Unit, build_units
 from app.schemas.plans import Placement
 from app.schemas.requirements import Program
 
-__all__ = ["Options", "PlanModel", "Result", "Unit", "build_units", "check_plan"]
+__all__ = [
+    "AddWish",
+    "Options",
+    "PlanModel",
+    "RepairRequest",
+    "RepairResult",
+    "RequestError",
+    "Result",
+    "Unit",
+    "build_units",
+    "check_plan",
+    "rebuild",
+    "repair",
+]
 
 
 def check_plan(

@@ -4,7 +4,8 @@ Each unit gets one yes/no variable per term it may sit in. Prerequisites, credit
 caps, duplicates, offering history and requirement coverage are constraints over
 those variables. In check mode (`fixed=True`) every unit stays where it is, so the
 model answers the same question as `validate()`: is this plan allowed as it stands?
-Repair (next milestone) frees planned units and adds an objective.
+Repair (repair.py) frees planned units, lets some be added or dropped, and puts the
+request and saved settings behind assumption literals so a conflict can be explained.
 """
 
 from dataclasses import dataclass, field
@@ -26,6 +27,14 @@ class Options:
     fixed: bool = True  # every unit stays in its current term
     requirements: RequirementMode = "off"
     offerings: bool = False  # keep courses out of seasons they've never run in
+    # units the solver may leave out (open slots, candidates it may add)
+    optional: frozenset[str] = frozenset()
+    # top-level requirements that must stay met; repair keeps what the plan already meets
+    keep_met: frozenset[str] | None = None
+    # check completed and in-progress work too; repair can't change it, so it doesn't
+    check_fixed: bool = True
+    # put caps and kept requirements behind assumption literals, to explain a conflict
+    explain: bool = False
 
 
 @dataclass
@@ -34,6 +43,11 @@ class Result:
     terms: dict[str, str] = field(default_factory=dict)  # unit id -> term
     assigned: dict[str, list[str]] = field(default_factory=dict)  # requirement -> unit ids
     satisfied: set[str] = field(default_factory=set)  # requirement ids met (any level)
+    # when infeasible with explain on: the assumptions that conflict
+    core: list[tuple] = field(default_factory=list)
+    optimal: bool = False
+    objective: float | None = None
+    values: dict[str, int] = field(default_factory=dict)  # the model's watched variables
 
     @property
     def feasible(self) -> bool:
@@ -64,22 +78,48 @@ class PlanModel:
         self.sat: dict[str, Lit] = {}
         self.a: dict[tuple[str, str], cp_model.IntVar] = {}
         self._before: dict[tuple[str, int], Lit] = {}
+        # assumption literal -> what it stands for, e.g. ("cap", "SP27")
+        self.assumptions: dict[int, tuple] = {}
+        self.guards: dict[tuple, cp_model.IntVar] = {}
+        # extra variables a caller wants read back from the solution, by name
+        self.watch: dict[str, cp_model.IntVar] = {}
+        self._guards: list[cp_model.IntVar] = []
 
         self._place()
         self._prereqs()
         self._credits(max_credits, term_caps or {})
         self._duplicates()
-        if self.opts.requirements != "off":
+        if self.opts.requirements != "off" or self.opts.keep_met is not None:
             self._requirements()
+
+    def guard(self, key: tuple) -> cp_model.IntVar | None:
+        """An assumption literal for one named constraint (None when not explaining)."""
+        if not self.opts.explain:
+            return None
+        g = self.m.NewBoolVar(f"assume{key}")
+        self.assumptions[g.Index()] = key
+        self.guards[key] = g
+        self._guards.append(g)
+        return g
+
+    @staticmethod
+    def only_if(ct, g):
+        if g is not None:
+            ct.OnlyEnforceIf(g)
+        return ct
+
+    def credits_in(self, t: int):
+        return sum(u.credits * self.x[u.id][t] for u in self.units if t in self.x[u.id])
 
     # where each unit may go ------------------------------------------------------
 
     def allowed(self, u: Unit) -> list[int]:
         if u.term not in self.index:
             # completed outside the plan's terms (AP or transfer credit) needs no slot;
-            # anything else there can't be placed
-            return []
-        if self.opts.fixed or u.fixed:
+            # a planned unit with no term yet (a candidate) may go in any future one
+            if u.status != "planned" or self.opts.fixed:
+                return []
+        elif self.opts.fixed or u.fixed:
             return [self.index[u.term]]
         options = range(self.now + 1, len(self.terms))
         if self.opts.offerings and u.seasons:
@@ -95,8 +135,8 @@ class PlanModel:
                 self.m.Add(self.present[u.id] == 1)  # outside the terms but done
                 continue
             self.m.Add(sum(self.x[u.id].values()) == self.present[u.id])
-            # every unit in the plan stays in it; repair will relax this for removable ones
-            self.m.Add(self.present[u.id] == 1)
+            if u.id not in self.opts.optional:
+                self.m.Add(self.present[u.id] == 1)
 
     # prerequisites ---------------------------------------------------------------
 
@@ -110,8 +150,8 @@ class PlanModel:
             earlier = [x for s, x in spots.items() if s < t]
             if not earlier:
                 lit: Lit = False
-            elif len(earlier) == len(spots):
-                lit = True  # every spot it may take is earlier
+            elif len(earlier) == len(spots) and v.id not in self.opts.optional:
+                lit = True  # it's in the plan and every spot it may take is earlier
             else:
                 lit = self.m.NewBoolVar(f"before[{v.id},{t}]")
                 self.m.Add(sum(earlier) == lit)
@@ -122,7 +162,7 @@ class PlanModel:
         spots = self.x[v.id]
         if t not in spots:
             return False
-        return True if len(spots) == 1 else spots[t]
+        return True if len(spots) == 1 and v.id not in self.opts.optional else spots[t]
 
     def _sat(self, expr: PrereqExpr | None, u: Unit, t: int) -> Lit:
         match expr:
@@ -146,6 +186,8 @@ class PlanModel:
         for u in self.units:
             if u.status == "completed" or u.prereqs is None:
                 continue
+            if u.status != "planned" and not self.opts.check_fixed:
+                continue  # already being taken; nothing a repair can change
             for t, x in self.x[u.id].items():
                 lit = self._sat(u.prereqs, u, t)
                 if lit is False:
@@ -161,8 +203,11 @@ class PlanModel:
             # like validate(): a term holding only completed work isn't capped
             if not here or all(u.status == "completed" for u, _ in here):
                 continue
-            cap = caps.get(term) or max_credits
-            self.m.Add(sum(u.credits * x for u, x in here) <= cap)
+            if not self.opts.check_fixed and all(u.status != "planned" for u, _ in here):
+                continue  # past and current terms are what they are
+            cap = caps[term] if term in caps else max_credits  # 0 means a term off
+            g = self.guard(("cap", term, cap))
+            self.only_if(self.m.Add(sum(u.credits * x for u, x in here) <= cap), g)
 
     def _duplicates(self):
         groups: dict[str, list[Unit]] = {}
@@ -198,11 +243,13 @@ class PlanModel:
         for top in (r for s in self.program.sets for r in s.requirements):
             lit = self._req_sat(top)
             tops.append(lit)
-            if self.opts.requirements == "require" and lit is not True:
+            keep = self.opts.keep_met is not None and top.id in self.opts.keep_met
+            if (self.opts.requirements == "require" or keep) and lit is not True:
+                g = self.guard(("met", top.id)) if keep else None
                 if lit is False:
-                    self.m.Add(self.m.NewConstant(0) == 1)
+                    self.only_if(self.m.AddBoolOr([]), g)  # can't be met at all
                 else:
-                    self.m.Add(lit == 1)
+                    self.only_if(self.m.Add(lit == 1), g)
 
         if self.opts.requirements == "maximize":
             # whole top-level rules first; met leaves only break ties, so the model
@@ -272,14 +319,34 @@ class PlanModel:
 
     # solving ---------------------------------------------------------------------
 
-    def solve(self, time_limit: float = 2.0, seed: int = 0) -> Result:
+    def solve(
+        self,
+        time_limit: float = 2.0,
+        seed: int = 0,
+        *,
+        assume: list[cp_model.IntVar] | None = None,
+        first_solution: bool = False,
+    ) -> Result:
+        """`assume` replaces the full set of assumptions (to test a smaller conflict);
+        `first_solution` stops as soon as any plan is found (a feasibility check)."""
         solver = cp_model.CpSolver()
         solver.parameters.num_workers = 1  # reproducible for the evaluation
         solver.parameters.random_seed = seed
         solver.parameters.max_time_in_seconds = time_limit
+        solver.parameters.stop_after_first_solution = first_solution
+        # LP reasoning over the credit and requirement sums; without it, proving that a
+        # tight request is impossible can take longer than the time limit
+        solver.parameters.linearization_level = 2
+        guards = self._guards if assume is None else assume
+        self.m.ClearAssumptions()
+        if guards:
+            self.m.AddAssumptions(guards)
         code = solver.Solve(self.m)
         if code == cp_model.INFEASIBLE:
-            return Result("infeasible")
+            core = solver.SufficientAssumptionsForInfeasibility() if guards else []
+            return Result(
+                "infeasible", core=[self.assumptions[i] for i in core if i in self.assumptions]
+            )
         if code not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return Result("unknown")
 
@@ -297,4 +364,13 @@ class PlanModel:
             if solver.Value(a):
                 assigned.setdefault(rid, []).append(uid)
         satisfied = {rid for rid, lit in self.sat.items() if value(lit)}
-        return Result("feasible", terms, assigned, satisfied)
+        objective = solver.ObjectiveValue() if self.m.HasObjective() else None
+        return Result(
+            "feasible",
+            terms,
+            assigned,
+            satisfied,
+            optimal=code == cp_model.OPTIMAL,
+            objective=objective,
+            values={name: solver.Value(v) for name, v in self.watch.items()},
+        )
