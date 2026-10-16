@@ -13,6 +13,8 @@ class Request(BaseModel):
     text: str | None = None  # what the student says, for advisor / LLM modes
     # structured edits; `course` is resolved to a placement id when the scenario loads
     ops: list[dict[str, Any]] = []
+    # the same request for the solver (a RepairRequest), for repair and advisor modes
+    constraints: dict[str, Any] | None = None
 
 
 class Expected(BaseModel):

@@ -9,6 +9,7 @@ from app.catalog.store import get_catalog
 from app.config import get_settings
 from app.planner.audit import audit
 from app.planner.ops import apply_ops, term_index, term_label, terms_between
+from app.planner.solver import RepairRequest, RepairResult, repair
 from app.planner.validate import prereq_edges, validate
 from app.requirements.loader import get_program
 from app.schemas import plans as s
@@ -287,6 +288,8 @@ def create_proposal(
     summary: str,
     changes: list[s.ProposedChange] = (),
     rejected: list[s.RejectedOption] = (),
+    extra_checks: list[str] = (),
+    solver: dict | None = None,
 ) -> s.Proposal:
     plan = get_plan(db, st)
     state = preview_ops(db, st, ops, origin="advisor")
@@ -300,6 +303,7 @@ def create_proposal(
             if st.term_caps
             else f"No term goes above {st.max_credits} credits"
         )
+    checks += extra_checks
     row = models.Proposal(
         plan_id=plan.id,
         base_version=plan.version,
@@ -309,6 +313,7 @@ def create_proposal(
             "changes": [c.model_dump() for c in changes],
             "rejected": [r.model_dump() for r in rejected],
             "checks": checks,
+            **({"solver": solver} if solver else {}),
         },
         violations=[v.model_dump() for v in state.violations],
     )
@@ -350,3 +355,109 @@ def visible_facts(db: Session, st: models.Student, conversation_id: int | None =
     if not st.memory_enabled:
         q = q.where(models.ProfileFact.conversation_id == conversation_id)
     return list(db.scalars(q.order_by(models.ProfileFact.id)))
+
+
+def repair_plan(
+    db: Session, st: models.Student, request: RepairRequest, summary: str
+) -> tuple[RepairResult, s.Proposal | None]:
+    """Ask the solver for the smallest change that meets `request` and, when there is
+    one, save it as a proposal the student can preview and apply. Raises RequestError
+    when the request names a placement, course or term that doesn't exist."""
+    plan = plan_schema(db, st, get_plan(db, st))
+    program = program_for(st)
+    catalog = get_catalog()
+    result = repair(
+        plan.placements,
+        plan.terms,
+        plan.current_term,
+        catalog,
+        program,
+        request,
+        max_credits=st.max_credits,
+        term_caps=st.term_caps or {},
+        slot_labels=slot_labels(st),
+    )
+    if result.status != "solved" or not result.ops:
+        return result, None
+    changes = explain_changes(
+        plan.placements, plan.terms, result.ops, request, program, catalog, st
+    )
+    checks = ["Every degree requirement the plan met before is still met"]
+    if result.optimal:
+        n = result.moved + result.added + result.removed + result.replaced
+        checks.append(f"No smaller change does this ({n} change{'s' if n != 1 else ''})")
+    proposal = create_proposal(
+        db,
+        st,
+        result.ops,
+        summary,
+        changes,
+        extra_checks=checks,
+        solver=s.SolverSummary(**result.model_dump()).model_dump(),
+    )
+    return result, proposal
+
+
+def explain_changes(placements, terms, ops, request: RepairRequest, program, catalog, st):
+    """A plain reason for each change the solver made, from what it was fixing."""
+    by_id = {p.id: p for p in placements}
+    before = validate(placements, terms, catalog, st.max_credits, st.term_caps)
+    broken = {
+        pid: v.message
+        for v in before
+        if v.kind in ("prereq", "offering")
+        for pid in v.placement_ids
+    }
+    caps = {**(st.term_caps or {}), **request.term_caps}
+    labels = {r.id: r.label for r in program.all_requirements()}
+    out: list[s.ProposedChange] = []
+    seen_removes: set[str] = set()
+    for op in ops:
+        if isinstance(op, s.MoveOp):
+            p = by_id[op.placement_id]
+            if p.id in request.keep:
+                continue
+            if request.move.get(p.id) == op.term:
+                reason = "You asked for it here"
+            elif p.id in broken:
+                reason = f"Fixes this: {broken[p.id]}"
+            elif p.term in request.lighter_terms:
+                reason = f"Lightens {term_label(p.term)}"
+            elif p.term in caps:
+                reason = f"Brings {term_label(p.term)} within {caps[p.term]} credits"
+            elif request.graduate_by and term_index(p.term) > term_index(request.graduate_by):
+                reason = f"Finishes by {term_label(request.graduate_by)}"
+            else:
+                reason = "Makes room for the rest of the change"
+            out.append(
+                s.ProposedChange(course=_label(p), from_term=p.term, to_term=op.term, reason=reason)
+            )
+        elif isinstance(op, s.RemoveOp) and op.placement_id not in seen_removes:
+            seen_removes.add(op.placement_id)
+            p = by_id[op.placement_id]
+            asked = p.id in request.remove or (p.course and p.course in request.avoid_courses)
+            reason = "You asked to drop it" if asked else "Not needed once the rest moves"
+            out.append(s.ProposedChange(course=_label(p), from_term=p.term, reason=reason))
+        elif isinstance(op, s.ReplaceOp):
+            p = by_id[op.placement_id]
+            label = p.slot_label or labels.get(p.slot, p.slot)
+            out.append(
+                s.ProposedChange(
+                    course=op.course, to_term=p.term, reason=f"Fills your open {label} slot"
+                )
+            )
+        elif isinstance(op, s.AddOp):
+            wished = op.course and any(
+                catalog.get(w.course) and catalog.get(w.course).code == op.course
+                for w in request.add
+            )
+            name = op.course or labels.get(op.slot, op.slot)
+            reason = "You asked for it" if wished else "Keeps that requirement on track"
+            if op.slot:
+                name = f"Open slot: {name}"
+            out.append(s.ProposedChange(course=name, to_term=op.term, reason=reason))
+    return out
+
+
+def _label(p: s.Placement) -> str:
+    return p.course or f"Open slot: {p.slot_label or p.slot}"

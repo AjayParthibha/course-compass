@@ -502,3 +502,71 @@ def test_memory_setting_rejects_null(client, auth):
     onboard(client, auth)
     res = client.patch("/api/profile/student", json={"memory_enabled": None}, headers=auth)
     assert res.status_code == 422
+
+
+def test_repair_makes_a_proposal_or_names_the_conflict(client, auth):
+    onboard(client, auth)
+    state = client.get("/api/plan", headers=auth).json()
+    plan = state["plan"]
+    future = plan["terms"][plan["terms"].index(plan["current_term"]) + 1 :]
+    load = {t: sum(p["credits"] for p in plan["placements"] if p["term"] == t) for t in future}
+    heavy = max(future, key=load.get)
+
+    body = {"summary": "Lighter term", "request": {"term_caps": {heavy: load[heavy] - 3}}}
+    res = client.post("/api/plan/repair", json=body, headers=auth).json()
+    result, proposal = res["result"], res["proposal"]
+    assert result["status"] == "solved" and result["blocking"] == 0 and result["optimal"]
+    assert result["moved"] >= 1 and proposal is not None
+    assert not [v for v in proposal["violations"] if v["blocking"]]
+    assert any("No smaller change" in c for c in proposal["checks"])
+    assert proposal["changes"] and all(c["reason"] for c in proposal["changes"])
+    assert proposal["solver"]["optimal"] and proposal["solver"]["moved"] == result["moved"]
+    applied = client.post(f"/api/proposals/{proposal['id']}/apply", headers=auth).json()
+    after = sum(p["credits"] for p in applied["plan"]["placements"] if p["term"] == heavy)
+    assert after <= load[heavy] - 3
+
+    nothing = {"request": {"term_caps": {t: 0 for t in future}}}
+    res = client.post("/api/plan/repair", json=nothing, headers=auth).json()
+    assert res["result"]["status"] == "infeasible" and res["proposal"] is None
+    assert any("(your request)" in c for c in res["result"]["conflicts"])
+
+    bad = client.post("/api/plan/repair", json={"request": {"keep": ["nope"]}}, headers=auth)
+    assert bad.status_code == 422 and "nope" in bad.json()["detail"]
+
+
+def test_repair_tool_reports_back(client, auth):
+    from app import models, services
+    from app.advisor.tools import ToolContext, call_tool
+    from app.models import SessionLocal
+
+    onboard(client, auth)
+    token = auth["Authorization"].split()[1]
+    with SessionLocal() as db:
+        student = db.query(models.Student).filter_by(token=token).one()
+        ctx = ToolContext(db=db, student=student)
+        ok = call_tool(ctx, "repair_plan", {"summary": "Check", "request": {}})
+        assert ok.summary == "nothing needs to change"
+        assert ok.data["status"] == "solved" and ok.data["changes"] == []
+        bad = call_tool(ctx, "repair_plan", {"summary": "x", "request": {"remove": ["nope"]}})
+        assert bad.summary.startswith("request rejected")
+
+        # a draft the planner flagged is withdrawn once repair_plan takes over
+        state = services.plan_state(db, student)
+        future = [t for t in state.plan.terms if t > state.plan.current_term][:1]
+        draft = call_tool(
+            ctx,
+            "propose_changes",
+            {
+                "summary": "Overload",
+                "ops": [
+                    {"op": "add", "term": future[0], "course": c}
+                    for c in ("CS 4780", "CS 4740", "CS 4820", "PSYCH 1101", "GOVT 1111")
+                ],
+                "changes": [],
+            },
+        )
+        assert draft.summary.startswith("proposal has")
+        ok = call_tool(ctx, "repair_plan", {"summary": "Check", "request": {}})
+        assert ok.data["withdrew_earlier_drafts"] == [draft.data["id"]]
+        row = services.get_proposal(db, student, draft.data["id"])
+        assert row.status == "discarded"
