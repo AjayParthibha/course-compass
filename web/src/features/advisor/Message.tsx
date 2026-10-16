@@ -41,25 +41,29 @@ export default function Message({ role, events, live, canAnswer, onAnswer, lates
         const e = b.event
         if (e.type === 'question')
           return (
-            <div key={i} className="flex flex-col gap-2 rounded-lg bg-ink p-3 text-paper">
-              <span className="font-semibold">{e.question}</span>
-              {e.options.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  disabled={!canAnswer}
-                  onClick={() => onAnswer(opt)}
-                  className="min-h-10 rounded-md border border-[#5A6158] bg-transparent px-3 text-left text-paper disabled:opacity-50"
-                >
-                  {opt}
-                </button>
-              ))}
-              <span className="text-[12px] text-[#C3C9BC]">Your answer is saved to your profile as something you said.</span>
-              {canAnswer && (
-                <button type="button" onClick={() => onAnswer('Ask me later.')} className="self-start border-0 bg-transparent p-0 text-[12.5px] text-paper underline">
-                  Ask me later
-                </button>
-              )}
+            <div key={i} className="flex flex-col gap-2 rounded-xl border border-line bg-white p-3.5">
+              <span className="text-[14px] leading-snug font-semibold">{e.question}</span>
+              <div className="flex flex-col gap-1.5">
+                {e.options.map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    disabled={!canAnswer}
+                    onClick={() => onAnswer(opt)}
+                    className="min-h-9 rounded-md border border-line-soft bg-ground px-3 py-1.5 text-left text-[13.5px] leading-snug transition-colors enabled:hover:border-line-strong enabled:hover:bg-chip disabled:text-muted"
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-[12px] text-muted">Your answer is saved to your profile as something you said.</span>
+                {canAnswer && (
+                  <button type="button" onClick={() => onAnswer('Ask me later.')} className="shrink-0 border-0 bg-transparent p-0 text-[12.5px] font-semibold text-ink underline underline-offset-2">
+                    Ask me later
+                  </button>
+                )}
+              </div>
             </div>
           )
         if (e.type === 'proposal') return <ProposalCard key={i} initial={e.proposal} latestId={latestProposalId} />

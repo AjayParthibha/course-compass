@@ -3,7 +3,7 @@ import { NavLink, Outlet, useMatch, useNavigate } from 'react-router'
 import { auth } from '../api/client'
 import { useMe, usePlan } from '../api/hooks'
 import { Logo } from '.'
-import { initials } from './terms'
+import AccountMenu from './AccountMenu'
 
 const PROGRAM_SHORT: Record<string, string> = { 'cs-eng': 'Eng B.S.', 'cs-as': 'A&S B.A.' }
 
@@ -56,19 +56,15 @@ export default function Layout() {
         <nav aria-label="Main" className="flex gap-0.5 sm:gap-1">
           <NavLink to="/plan" className={link}>Plan</NavLink>
           <NavLink to="/explore" className={link}>Explore</NavLink>
-          <NavLink to="/profile" className={link}>Profile</NavLink>
         </nav>
         <div className="flex-1" />
         <PlanStatus />
-        <button
-          type="button"
-          onClick={signOut}
-          title="Sign out"
-          aria-label={`Signed in as ${me?.code ?? ''}. Sign out`}
-          className="h-9 w-9 shrink-0 rounded-full border-0 bg-ink text-[13px] font-bold text-paper"
-        >
-          {initials(me?.code ?? '')}
-        </button>
+        <AccountMenu
+          code={me?.code ?? ''}
+          program={me?.program ? (PROGRAM_SHORT[me.program] ?? me.program) : null}
+          graduation={me?.graduation_term}
+          onSignOut={signOut}
+        />
       </header>
       <Outlet />
     </div>

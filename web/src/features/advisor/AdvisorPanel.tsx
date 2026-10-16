@@ -1,14 +1,15 @@
 import { useQueries } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router'
+import { useMe, usePlan } from '../../api/hooks'
+import { usePlanUI } from '../plan/store'
 import Message from './Message'
 import { proposalQuery } from './proposalQuery'
 import { latestProposalId } from './proposalState'
 import { useAdvisor } from './store'
+import { suggestPrompts } from './suggestions'
 import { useChat } from './useChat'
 import { Button } from '../../ui'
-
-const SUGGESTIONS = ['Make spring lighter', 'Am I on track?', 'What should I take for liberal studies?']
 
 type Props = {
   variant: 'side' | 'sheet'
@@ -29,6 +30,13 @@ export default function AdvisorPanel({ variant, onClose, focusInput = false }: P
     combine: (results) => new Map(results.flatMap((r) => (r.data ? [[r.data.id, r.data] as const] : []))),
   })
   const latestId = latestProposalId(events, (p) => current.get(p.id) ?? p)
+  const { data: plan } = usePlan()
+  const { data: me } = useMe()
+  const selected = usePlanUI((s) => s.selected)
+  const suggestions = useMemo(() => {
+    const asked = turns.filter((t) => t.role === 'user').map((t) => t.events.map((e) => (e.type === 'text' ? e.delta : '')).join(''))
+    return suggestPrompts({ state: plan, selected, asked, maxCredits: me?.max_credits, termCaps: me?.term_caps })
+  }, [plan, selected, turns, me])
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight })
@@ -103,13 +111,13 @@ export default function AdvisorPanel({ variant, onClose, focusInput = false }: P
 
       <div className="flex flex-col gap-2 border-t border-line p-3">
         <div className="flex flex-wrap gap-1.5">
-          {SUGGESTIONS.map((s) => (
+          {suggestions.map((s) => (
             <button
               key={s}
               type="button"
               disabled={streaming}
               onClick={() => send(s)}
-              className="h-8 rounded-full border border-line bg-white px-3 text-[12.5px]"
+              className="min-h-8 max-w-full rounded-2xl border border-line bg-white px-3 py-1 text-left text-[12.5px] leading-snug"
             >
               {s}
             </button>
