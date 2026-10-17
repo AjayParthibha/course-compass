@@ -149,11 +149,12 @@ def validate(
         if all(p.status == "completed" for p in items):
             continue
         total = sum(p.credits for p in items)
+        # a cap of 0 is a real cap (a term off), so check for None rather than falsy
         cap = (term_caps or {}).get(term)
-        if total > (cap or max_credits):
+        if total > (cap if cap is not None else max_credits):
             message = (
                 f"{term_label(term)} has {total} credits, over your {cap}-credit cap for that term"
-                if cap
+                if cap is not None
                 else f"{term_label(term)} has {total} credits, over your limit of {max_credits}"
             )
             violations.append(
