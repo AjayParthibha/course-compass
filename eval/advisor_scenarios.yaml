@@ -1,0 +1,278 @@
+# The four report scenarios, run through the real advisor (harness/advisor.py).
+# `request.text` is what the student types; `request.constraints` is the same request
+# written as a RepairRequest, used to score the answer and to get the solver's minimum.
+# Placement ids are course codes without spaces, lowercased (cs4701).
+
+- id: adv-1-lighter-spring
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  # a typical Engineering CS history: both writing seminars, ENGRI and some liberal
+  # studies done, so onboarding seeds the usual open slots and terms start near 15 credits
+  history: &history
+    FA24: [CS 1110, MATH 1910, CHEM 2090, ENGL 1105]
+    SP25: [CS 2110, MATH 1920, PHYS 1112, ENGL 1111, ENGRI 1101]
+    FA25: [CS 2800, MATH 2940, PHYS 2213, ECON 1110]
+    SP26: [CS 3110, ENGRD 2700, PSYCH 1101, PHIL 1100]
+    FA26: [CS 3780, CS 4820, ORIE 3300, GOVT 1111]
+  plan:
+    SP27: [CS 3410, CS 4740, CS 4780]
+    FA27: [CS 4410, CS 4320, ORIE 3500]
+    SP28: [CS 4701]
+  request:
+    text: Can you make Spring '27 12 credits at most?
+    constraints: {term_caps: {SP27: 12}}
+  expected:
+    outcome: feasible
+
+- id: adv-2-drop-prereq
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410]
+  request:
+    text: I want to drop CS 3410.
+    constraints: {remove: [cs3410]}
+  expected:
+    outcome: infeasible
+    notes: >-
+      CS 4410 needs CS 3410 or CS 3420, and CS 3420 needs ECE/ENGRD 2300, which isn't in
+      the plan. The honest answer is that CS 3410 can't simply go.
+
+- id: adv-3-graduate-early
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740, CS 4320]
+    FA27: [CS 4410, CS 4701, ORIE 3500]
+    SP28: [CS 4780]
+  request:
+    text: Can I graduate a semester early, in Fall '27, and keep every semester at 15 credits or less?
+    constraints: {graduate_by: FA27, term_caps: {SP27: 15, FA27: 15}}
+  expected:
+    outcome: infeasible
+    notes: The remaining courses and requirement slots don't fit in two 15-credit terms.
+
+- id: adv-4-push-practicum
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410, CS 4701, CS 4320, ORIE 3500]
+    SP28: [CS 4780]
+  request:
+    text: Push CS 4701 to my last spring, but keep that semester at 15 credits or less.
+    constraints: {move: {cs4701: SP28}, term_caps: {SP28: 15}}
+  expected:
+    outcome: feasible
+
+- id: adv-5-add-in-term
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410, CS 4320]
+    SP28: [CS 4780]
+  request:
+    text: Add CS 4700 in Spring '28.
+    constraints: {add: [{course: CS 4700, term: SP28}]}
+  expected:
+    outcome: feasible
+
+- id: adv-6-add-wrong-season
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410, CS 4320]
+    SP28: [CS 4780]
+  request:
+    text: Add CS 4620 in Spring '28.
+    constraints: {add: [{course: CS 4620, term: SP28}]}
+  expected:
+    outcome: infeasible
+    notes: CS 4620 has only run in fall.
+
+- id: adv-7-avoid
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410, CS 4320]
+    SP28: [CS 4780]
+  request:
+    text: I don't want to take CS 4320 anymore.
+    constraints: {avoid_courses: [CS 4320]}
+  expected:
+    outcome: feasible
+
+- id: adv-8-two-caps
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410, CS 4320, ORIE 3500]
+    SP28: [CS 4780, CS 4701]
+  request:
+    text: Keep both Fall '27 and Spring '28 at 14 credits or less.
+    constraints: {term_caps: {FA27: 14, SP28: 14}}
+  expected:
+    outcome: feasible
+
+- id: adv-9-fix-prereqs
+  split: heldout
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 4410, CS 4740]
+    FA27: [CS 3410, CS 4320]
+    SP28: [CS 4780]
+  request:
+    text: Something looks wrong with my plan. Can you fix it?
+    constraints: {}
+  expected:
+    outcome: feasible
+    notes: CS 4410 is planned before CS 3410, which it needs.
+
+- id: adv-10-keep-and-cap
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740, CS 4780]
+    FA27: [CS 4410, CS 4320]
+    SP28: [CS 4701]
+  request:
+    text: Keep CS 4740 in Spring '27, but make that semester 12 credits max.
+    constraints: {keep: [cs4740], term_caps: {SP27: 12}}
+  expected:
+    outcome: feasible
+
+- id: adv-11-study-abroad
+  split: heldout
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410, CS 4320]
+    SP28: [CS 4780]
+  request:
+    text: I'm studying abroad in Spring '27 and can't take any Cornell courses that semester.
+    constraints: {term_caps: {SP27: 0}}
+  expected:
+    outcome: infeasible
+    notes: Everything left doesn't fit in two terms at 18 credits.
+
+- id: adv-12-drop-with-replacement
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410, CS 4320]
+    SP28: [CS 4780]
+  request:
+    text: Drop CS 4740 from my plan; I'll pick a different practicum later.
+    constraints: {remove: [cs4740]}
+  expected:
+    outcome: feasible
+    notes: The practicum still needs a course, so an open practicum slot should take its place.
+
+- id: adv-13-impossible-move
+  split: heldout
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410, CS 4320]
+    SP28: [CS 4780]
+  request:
+    text: Move CS 4410 to Spring '27.
+    constraints: {move: {cs4410: SP27}}
+  expected:
+    outcome: infeasible
+    notes: CS 4410 needs CS 3410, which can't be taken before Spring '27.
+
+- id: adv-14-lighter-fall
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410, CS 4320, ORIE 3500]
+    SP28: [CS 4780]
+  request:
+    text: Make Fall '27 lighter.
+    constraints: {lighter_terms: [FA27], term_caps: {FA27: 14}}
+  expected:
+    outcome: feasible
+    notes: Scored as Fall '27 ending lighter than it started; the cap gives the solver's minimum.
+
+- id: adv-15-add-anywhere
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *history
+  plan:
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4410, CS 4320]
+    SP28: [CS 4780]
+  request:
+    text: Add CS 4110 to my plan wherever it fits best.
+    constraints: {add: [{course: CS 4110}]}
+  expected:
+    outcome: feasible

@@ -2,6 +2,7 @@
 
     uv run python -m harness.run --mode validate
     uv run python -m harness.run --mode validate --split heldout
+    uv run python -m harness.run --mode repair_global --scenarios advisor_scenarios.yaml
 
 Each mode is a function (scenario, catalog, program) -> dict of result columns.
 Add new modes (repair, rebuild, llm_direct, advisor...) to MODES.
@@ -17,8 +18,9 @@ from pydantic import TypeAdapter
 
 from app.catalog.store import get_catalog
 from app.planner.audit import audit
+from app.planner.initial import seed_slots
 from app.planner.ops import OpError, apply_ops
-from app.planner.solver import check_plan
+from app.planner.solver import RepairRequest, check_plan, repair
 from app.planner.validate import validate
 from app.requirements.loader import load_program
 from app.schemas.plans import PlanOp
@@ -81,7 +83,47 @@ def run_model(s: Scenario, catalog, program) -> dict:
     }
 
 
-MODES = {"validate": run_validate, "model": run_model}
+def _solve(s: Scenario, catalog, program, strategy: str) -> dict:
+    """The solver alone on the scenario's structured request, starting from the plan
+    onboarding would build (history plus open slots)."""
+    if s.request.constraints is None:
+        return {"predicted": "n/a", "error": "scenario has no request.constraints"}
+    placements = seed_slots(s.placements(catalog), s.terms, s.current, program, catalog)
+    request = RepairRequest(**s.request.constraints)
+    r = repair(
+        placements,
+        s.terms,
+        s.current,
+        catalog,
+        program,
+        request,
+        max_credits=s.max_credits,
+        strategy=strategy,
+    )
+    return {
+        "predicted": {"solved": "feasible", "infeasible": "infeasible"}.get(r.status, "timeout"),
+        "moves": r.moved,
+        "changes": r.moved + r.added + r.removed + r.replaced,
+        "optimal": r.optimal,
+        "blocking_violations": r.blocking,
+        "conflicts": " | ".join(r.conflicts),
+    }
+
+
+def run_repair_global(s: Scenario, catalog, program) -> dict:
+    return _solve(s, catalog, program, "global")
+
+
+def run_rebuild(s: Scenario, catalog, program) -> dict:
+    return _solve(s, catalog, program, "rebuild")
+
+
+MODES = {
+    "validate": run_validate,
+    "model": run_model,
+    "repair_global": run_repair_global,
+    "rebuild": run_rebuild,
+}
 
 
 def main():

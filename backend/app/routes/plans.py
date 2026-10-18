@@ -2,7 +2,9 @@ from fastapi import APIRouter, HTTPException
 
 from app import services
 from app.planner.ops import OpError
+from app.planner.solver import RepairRequest, RepairResult, RequestError
 from app.routes.auth import DB, CurrentStudent
+from app.schemas.base import Schema
 from app.schemas.plans import OpsRequest, PlanState, Proposal
 from app.schemas.profile import PlanSettingsUpdate, Student
 
@@ -28,6 +30,30 @@ def apply_ops(body: OpsRequest, db: DB, student: CurrentStudent) -> PlanState:
         raise HTTPException(400, str(e)) from None
     except services.NotReady:
         raise HTTPException(409, "finish onboarding first") from None
+
+
+class RepairBody(Schema):
+    summary: str = "Rearranged the plan to meet your request"
+    request: RepairRequest = RepairRequest()
+
+
+class RepairResponse(Schema):
+    result: RepairResult
+    proposal: Proposal | None = None
+
+
+@router.post("/plan/repair")
+def repair(body: RepairBody, db: DB, student: CurrentStudent) -> RepairResponse:
+    """Find the smallest valid change that meets the request and save it as a proposal.
+    An impossible request comes back with `result.conflicts` and no proposal; a request
+    naming a placement, course or term that doesn't exist is a 422."""
+    try:
+        result, proposal = services.repair_plan(db, student, body.request, body.summary)
+    except RequestError as e:
+        raise HTTPException(422, str(e)) from None
+    except services.NotReady:
+        raise HTTPException(409, "finish onboarding first") from None
+    return RepairResponse(result=result, proposal=proposal)
 
 
 @router.patch("/plan/settings")

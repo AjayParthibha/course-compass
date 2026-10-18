@@ -239,6 +239,7 @@ export function lighterSpringProposal(base: number): Proposal {
       'Requirement progress is identical to before',
     ],
     violations: [],
+    solver: null,
     status: 'pending',
     created_at: day('10-04'),
   }

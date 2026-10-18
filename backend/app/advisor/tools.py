@@ -17,6 +17,8 @@ from app import models, services
 from app.catalog.store import get_catalog
 from app.models import now
 from app.planner.eligible import list_eligible as _list_eligible
+from app.planner.ops import term_label
+from app.planner.solver import RepairRequest, RequestError
 from app.schemas.advisor import ProfileUpdateEvent, ProposalEvent, QuestionEvent
 from app.schemas.plans import AdvisorOp, ProposedChange, RejectedOption
 
@@ -194,6 +196,81 @@ def propose_changes(
     blocking = [v.message for v in proposal.violations if v.blocking]
     summary = "proposal ready" if not blocking else f"proposal has {len(blocking)} problems"
     return ToolResult(proposal.model_dump(mode="json"), summary)
+
+
+@tool
+def repair_plan(ctx: ToolContext, summary: str, request: RepairRequest) -> ToolResult:
+    """Find the smallest valid change that does what the student asked, and show it to
+    them as a proposal (nothing changes until they apply it). Use this for structural
+    changes: lighter or capped terms, dropping or adding a course, moving a course to a
+    term, graduating earlier, fixing prerequisite or season problems. It moves courses
+    and open slots, can add open slots or a course from a short list of alternatives (CS
+    4410 or CS 4414), fills an open slot with a course the student asked for, never picks
+    electives, and keeps every requirement the plan already meets.
+
+    Fill `request` from what the student said; use placement ids from get_plan_state
+    for keep/move/remove, and terms like "SP27". Leave out what they didn't ask for. For
+    "make a term lighter", cap it in term_caps below its current credits (lighter_terms
+    alone only breaks ties). Only set allow_removing_courses when they agreed to drop
+    courses.
+
+    The result lists `changes` in plain words; tell the student what moves where. If the
+    request can't be met, `conflicts` says why and `alternatives` lists nearby versions
+    that were checked and do work. Offer only those alternatives, never ones you came up
+    with, and don't work around the conflict with propose_changes. A broken draft you
+    made earlier in this turn is withdrawn automatically."""
+    withdrawn = _withdraw_broken_drafts(ctx)
+    try:
+        result, proposal = services.repair_plan(ctx.db, ctx.student, request, summary)
+    except RequestError as e:
+        return ToolResult({"error": str(e)}, f"request rejected: {e}")
+    if proposal:
+        ctx.events.append(ProposalEvent(proposal=proposal))
+    data = {
+        "status": result.status,
+        "changes": [_change_text(c) for c in proposal.changes] if proposal else [],
+        "conflicts": result.conflicts,
+        "alternatives": result.alternatives,
+        "smallest_possible": result.optimal,
+        "withdrew_earlier_drafts": withdrawn,
+    }
+    if result.status == "infeasible":
+        summary = f"can't be done ({len(result.alternatives)} alternatives that work)"
+    elif result.status == "timeout":
+        summary = "no answer in time"
+    elif not proposal:
+        summary = "nothing needs to change"
+    else:
+        n = result.moved + result.added + result.removed + result.replaced
+        summary = f"proposal ready · {n} change{'s' if n != 1 else ''}"
+    return ToolResult(data, summary)
+
+
+def _change_text(c: ProposedChange) -> str:
+    """CS 4701: Fall ’27 → Spring ’28 (you asked for it here)"""
+    if c.from_term and c.to_term:
+        where = f"{term_label(c.from_term)} → {term_label(c.to_term)}"
+    elif c.to_term:
+        where = f"added in {term_label(c.to_term)}"
+    else:
+        where = f"removed from {term_label(c.from_term)}" if c.from_term else "removed"
+    return f"{c.course}: {where} ({c.reason[0].lower() + c.reason[1:]})"
+
+
+def _withdraw_broken_drafts(ctx: ToolContext) -> list[int]:
+    """Discard proposals made earlier in this turn that the planner flagged, so the
+    student isn't left with a broken draft next to the working one."""
+    ids = []
+    for e in ctx.events:
+        if not isinstance(e, ProposalEvent) or not any(v.blocking for v in e.proposal.violations):
+            continue
+        row = services.get_proposal(ctx.db, ctx.student, e.proposal.id)
+        if row is not None and row.status == "pending":
+            row.status = "discarded"
+            ids.append(row.id)
+    if ids:
+        ctx.db.commit()
+    return ids
 
 
 @tool

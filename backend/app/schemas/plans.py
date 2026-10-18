@@ -144,6 +144,18 @@ class RejectedOption(Schema):
 ProposalStatus = Literal["pending", "applied", "discarded", "outdated"]
 
 
+class SolverSummary(Schema):
+    """How the planner's solver made a proposal (absent for hand-written ones)."""
+
+    strategy: str
+    moved: int
+    added: int
+    removed: int
+    replaced: int = 0
+    optimal: bool  # no smaller change exists
+    runtime_ms: int
+
+
 class Proposal(Schema):
     id: int
     plan_id: int
@@ -154,5 +166,6 @@ class Proposal(Schema):
     rejected: list[RejectedOption] = []
     checks: list[str] = []
     violations: list[Violation] = []
+    solver: SolverSummary | None = None
     status: ProposalStatus = "pending"
     created_at: datetime

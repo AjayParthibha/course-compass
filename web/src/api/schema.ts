@@ -78,6 +78,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plan/repair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Repair
+         * @description Find the smallest valid change that meets the request and save it as a proposal.
+         *     An impossible request comes back with `result.conflicts` and no proposal; a request
+         *     naming a placement, course or term that doesn't exist is a 422.
+         */
+        post: operations["repair_api_plan_repair_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plan/settings": {
         parameters: {
             query?: never;
@@ -540,6 +562,13 @@ export interface components {
             course: string | null;
             /** Slot */
             slot: string | null;
+        };
+        /** AddWish */
+        AddWish: {
+            /** Course */
+            course: string;
+            /** Term */
+            term?: string | null;
         };
         /** AllOf */
         AllOf: {
@@ -1156,6 +1185,7 @@ export interface components {
              * @default []
              */
             violations: components["schemas"]["Violation"][];
+            solver: components["schemas"]["SolverSummary"] | null;
             /**
              * Status
              * @default pending
@@ -1262,6 +1292,148 @@ export interface components {
             op: "remove";
             /** Placement Id */
             placement_id: string;
+        };
+        /** RepairBody */
+        RepairBody: {
+            /**
+             * Summary
+             * @default Rearranged the plan to meet your request
+             */
+            summary?: string;
+            /**
+             * @default {
+             *       "term_caps": {},
+             *       "keep": [],
+             *       "move": {},
+             *       "remove": [],
+             *       "add": [],
+             *       "avoid_courses": [],
+             *       "lighter_terms": [],
+             *       "allow_removing_courses": false
+             *     }
+             */
+            request?: components["schemas"]["RepairRequest"];
+        };
+        /**
+         * RepairRequest
+         * @description What the student wants changed. Saved settings stay the hard defaults; this adds to
+         *     them. Everything here can be named back when the request can't be met.
+         */
+        RepairRequest: {
+            /**
+             * Term Caps
+             * @default {}
+             */
+            term_caps?: {
+                [key: string]: number;
+            };
+            /**
+             * Keep
+             * @default []
+             */
+            keep?: string[];
+            /**
+             * Move
+             * @default {}
+             */
+            move?: {
+                [key: string]: string;
+            };
+            /**
+             * Remove
+             * @default []
+             */
+            remove?: string[];
+            /**
+             * Add
+             * @default []
+             */
+            add?: components["schemas"]["AddWish"][];
+            /**
+             * Avoid Courses
+             * @default []
+             */
+            avoid_courses?: string[];
+            /**
+             * Lighter Terms
+             * @default []
+             */
+            lighter_terms?: string[];
+            /** Graduate By */
+            graduate_by?: string | null;
+            /**
+             * Allow Removing Courses
+             * @default false
+             */
+            allow_removing_courses?: boolean;
+        };
+        /** RepairResponse */
+        RepairResponse: {
+            result: components["schemas"]["RepairResult"];
+            proposal: components["schemas"]["Proposal"] | null;
+        };
+        /** RepairResult */
+        RepairResult: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "solved" | "infeasible" | "timeout";
+            /**
+             * Strategy
+             * @enum {string}
+             */
+            strategy: "global" | "rebuild";
+            /**
+             * Ops
+             * @default []
+             */
+            ops: (components["schemas"]["AddOp-Output"] | components["schemas"]["RemoveOp-Output"] | components["schemas"]["MoveOp-Output"] | components["schemas"]["ReplaceOp-Output"] | components["schemas"]["LockOp-Output"])[];
+            /**
+             * Moved
+             * @default 0
+             */
+            moved: number;
+            /**
+             * Added
+             * @default 0
+             */
+            added: number;
+            /**
+             * Removed
+             * @default 0
+             */
+            removed: number;
+            /**
+             * Replaced
+             * @default 0
+             */
+            replaced: number;
+            /**
+             * Optimal
+             * @default false
+             */
+            optimal: boolean;
+            /**
+             * Runtime Ms
+             * @default 0
+             */
+            runtime_ms: number;
+            /**
+             * Conflicts
+             * @default []
+             */
+            conflicts: string[];
+            /**
+             * Alternatives
+             * @default []
+             */
+            alternatives: string[];
+            /**
+             * Blocking
+             * @default 0
+             */
+            blocking: number;
         };
         /** ReplaceOp */
         "ReplaceOp-Input": {
@@ -1395,6 +1567,29 @@ export interface components {
              * @default []
              */
             blocked: components["schemas"]["BlockedCourse"][];
+        };
+        /**
+         * SolverSummary
+         * @description How the planner's solver made a proposal (absent for hand-written ones).
+         */
+        SolverSummary: {
+            /** Strategy */
+            strategy: string;
+            /** Moved */
+            moved: number;
+            /** Added */
+            added: number;
+            /** Removed */
+            removed: number;
+            /**
+             * Replaced
+             * @default 0
+             */
+            replaced: number;
+            /** Optimal */
+            optimal: boolean;
+            /** Runtime Ms */
+            runtime_ms: number;
         };
         /** Student */
         Student: {
@@ -1652,6 +1847,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repair_api_plan_repair_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepairBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepairResponse"];
                 };
             };
             /** @description Validation Error */

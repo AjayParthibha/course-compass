@@ -15,6 +15,7 @@ function proposal(id: number, extra: Partial<Proposal> = {}): Proposal {
     rejected: [],
     checks: [],
     violations: [],
+    solver: null,
     status: 'pending',
     created_at: '2026-10-01T00:00:00Z',
     ...extra,
