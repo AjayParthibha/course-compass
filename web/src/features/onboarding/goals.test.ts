@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { emptyGoals, factsToSupersede, goalFacts, startingChoices } from './goals'
+import { emptyGoals, factsToSupersede, goalFacts, graduationTerms, olderRules, stageOf, startingChoices } from './goals'
 
 describe('goalFacts', () => {
   it('saves nothing when everything is skipped', () => {
@@ -50,5 +50,26 @@ describe('goalFacts', () => {
   it('keeps free text for other plans', () => {
     const [fact] = goalFacts({ ...emptyGoals, after: 'other', afterOther: 'Start a company' })
     expect(fact).toEqual({ dimension: 'career_track', value: 'Start a company', text: 'After graduating: Start a company' })
+  })
+})
+
+describe('where a student is', () => {
+  it('splits by first semester against this one', () => {
+    expect(stageOf('SP27', 'FA26')).toBe('incoming')
+    expect(stageOf('FA26', 'FA26')).toBe('first')
+    expect(stageOf('FA24', 'FA26')).toBe('continuing')
+  })
+
+  it('names older rules only when the entering year has none of its own', () => {
+    expect(olderRules('FA24', ['2024-25'])).toBeNull()
+    expect(olderRules('SP25', ['2024-25'])).toBeNull()
+    expect(olderRules('FA26', ['2024-25'])).toBe('2024-25')
+    expect(olderRules('FA23', ['2024-25'])).toBeNull()
+  })
+
+  it('offers graduation terms that come after the start', () => {
+    expect(graduationTerms('FA24', 'FA26').slice(0, 2)).toEqual(['FA26', 'SP27'])
+    expect(graduationTerms('SP27', 'FA26')[0]).toBe('FA27')
+    expect(graduationTerms('FA26', 'FA26')).toHaveLength(10)
   })
 })

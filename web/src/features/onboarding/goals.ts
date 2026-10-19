@@ -1,4 +1,5 @@
 import type { components } from '../../api/schema'
+import { termIndex, termsAfter } from '../profile/settings'
 
 type FactCreate = Pick<components['schemas']['FactCreate'], 'dimension' | 'value' | 'text'>
 
@@ -89,4 +90,38 @@ export function startingChoices(me: Setup | undefined, programs: string[]) {
     entering: me?.entering_term ?? 'FA24',
     graduating: me?.graduation_term ?? 'SP28',
   }
+}
+
+/**
+ * Where a student is, from their first semester and the current one: starting next term
+ * (nothing taken yet), in their first semester (taking courses now), or partway through.
+ */
+export type Stage = 'incoming' | 'first' | 'continuing'
+
+export function stageOf(entering: string, current: string): Stage {
+  const e = termIndex(entering)
+  const c = termIndex(current)
+  return e > c ? 'incoming' : e === c ? 'first' : 'continuing'
+}
+
+/** FA24 -> 2024-25, SP25 -> 2024-25 (as the backend reads it). */
+export function catalogYear(entering: string) {
+  const year = 2000 + Number(entering.slice(2))
+  const start = entering.startsWith('FA') ? year : year - 1
+  return `${start}-${String(start + 1).slice(2)}`
+}
+
+/** The rule year a student is checked against when it isn't their entering year's
+ * (later entrants share the newest rules we have), else null. */
+export function olderRules(entering: string, years: string[]) {
+  const wanted = catalogYear(entering)
+  const used = years.filter((y) => y <= wanted).sort().at(-1)
+  return used && used !== wanted ? used : null
+}
+
+/** Graduation choices: from this term (or the term after the first one) for five years. */
+export function graduationTerms(entering: string, current: string) {
+  return stageOf(entering, current) === 'continuing'
+    ? [current, ...termsAfter(current, undefined, 9)]
+    : termsAfter(termIndex(entering) > termIndex(current) ? entering : current, undefined, 10)
 }

@@ -27,6 +27,14 @@ class ParsedCourse(Schema):
     issue: Issue | None = None
 
 
+class OnboardingOptions(Schema):
+    current_term: str
+    # entering terms we have rules for, oldest first, through the term after this one
+    entering_terms: list[str]
+    # program id -> catalog years with rule files, e.g. {"cs-eng": ["2024-25"]}
+    rule_years: dict[str, list[str]]
+
+
 class ParseRequest(Schema):
     text: str
     program: str

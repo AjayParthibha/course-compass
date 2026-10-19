@@ -45,6 +45,16 @@ def get_program(program_id: str, catalog_year: str) -> Program:
     return load_program(program_id, catalog_year)
 
 
+def rules_year_for(program_id: str, entering_term: str) -> str | None:
+    """The rule year a student is checked against: their entering year's, or for a later
+    entrant whose year isn't encoded yet, the newest earlier one (the CS checklist covers
+    students who matriculated in Fall 2024 or later). None if they started before every
+    encoded year."""
+    wanted = catalog_year_for(entering_term)
+    years = [y for y in available_years(program_id) if y <= wanted]
+    return max(years) if years else None
+
+
 def available_years(program_id: str) -> list[str]:
     _, college, major = PROGRAMS[program_id]
     rules = get_settings().data_dir / "requirements"

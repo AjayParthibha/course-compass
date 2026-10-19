@@ -186,6 +186,15 @@ export function useAreas(slot: string, term: string, placement: string | null, e
   })
 }
 
+/** The current term and the entering terms onboarding can take. */
+export function useOnboardingOptions() {
+  return useQuery({
+    queryKey: ['onboarding', 'options'],
+    queryFn: () => unwrap(api.GET('/api/onboarding/options')),
+    staleTime: Infinity,
+  })
+}
+
 export function useLatestConversation() {
   return useQuery({
     queryKey: keys.conversation,

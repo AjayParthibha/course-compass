@@ -340,6 +340,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/onboarding/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Options
+         * @description The current term, the entering terms we have rules for (through the next term, for
+         *     students about to start), and each program's rule years.
+         */
+        get: operations["options_api_onboarding_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/onboarding/parse": {
         parameters: {
             query?: never;
@@ -1006,6 +1027,17 @@ export interface components {
             offering_note: string;
             /** Assumed */
             assumed: boolean;
+        };
+        /** OnboardingOptions */
+        OnboardingOptions: {
+            /** Current Term */
+            current_term: string;
+            /** Entering Terms */
+            entering_terms: string[];
+            /** Rule Years */
+            rule_years: {
+                [key: string]: string[];
+            };
         };
         /** OpsRequest */
         OpsRequest: {
@@ -2432,6 +2464,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    options_api_onboarding_options_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingOptions"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -589,3 +589,47 @@ def test_advisor_approval_relaxes_the_one_subject_rule(client, auth):
     # only rules that allow an approval can record one
     res = client.put("/api/profile/approvals/core", json={"approved": True}, headers=auth)
     assert res.status_code == 404
+
+
+def confirm_plan(client, auth, entering, graduating, courses=()):
+    return client.post(
+        "/api/onboarding/confirm",
+        json={
+            "program": "cs-eng",
+            "entering_term": entering,
+            "graduation_term": graduating,
+            "courses": list(courses),
+        },
+        headers=auth,
+    )
+
+
+def test_onboarding_options_run_through_next_term(client, auth):
+    res = client.get("/api/onboarding/options", headers=auth).json()
+    assert res["current_term"] == "FA26"
+    # rules start at 2024-25; a student starting next term can onboard too
+    assert res["entering_terms"][0] == "FA24" and res["entering_terms"][-1] == "SP27"
+    assert res["rule_years"]["cs-eng"] == ["2024-25"]
+
+
+def test_a_student_who_hasnt_started_gets_an_all_planned_plan(client, auth):
+    res = confirm_plan(client, auth, "SP27", "FA30")
+    assert res.status_code == 200
+    state = res.json()
+    placements = state["plan"]["placements"]
+    assert placements and all(p["status"] == "planned" for p in placements)
+    assert {p["term"] for p in placements} <= set(state["plan"]["terms"])
+    # later entrants are checked against the newest rules we have
+    assert client.get("/api/auth/me", headers=auth).json()["catalog_year"] == "2024-25"
+
+
+def test_a_first_semester_students_courses_are_in_progress(client, auth):
+    res = confirm_plan(client, auth, "FA26", "SP30", [{"term": None, "code": "CS 1110"}])
+    assert res.status_code == 200
+    cs = next(p for p in res.json()["plan"]["placements"] if p["course"] == "CS 1110")
+    assert (cs["term"], cs["status"]) == ("FA26", "in_progress")
+
+
+def test_students_who_started_before_the_rules_are_turned_away(client, auth):
+    res = confirm_plan(client, auth, "FA23", "SP27")
+    assert res.status_code == 400 and "Fall 2024 or later" in res.json()["detail"]

@@ -1,16 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, unwrap } from '../../api/client'
-import { keys, useMe, useSignOut } from '../../api/hooks'
+import { keys, useMe, useOnboardingOptions, useSignOut } from '../../api/hooks'
 import type { ParsedCourse, ParseResult } from '../../api/types'
 import { Button, Logo, SectionLabel } from '../../ui'
 import { termLabel } from '../../ui/terms'
-import { termIndex } from '../profile/settings'
+import { termIndex, termsAfter } from '../profile/settings'
 import GoalsStep from './GoalsStep'
-import { startingChoices } from './goals'
-
-const ENTERING = ['FA22', 'SP23', 'FA23', 'SP24', 'FA24', 'SP25', 'FA25', 'SP26']
-const GRADUATING = ['FA26', 'SP27', 'FA27', 'SP28', 'FA28', 'SP29', 'FA29', 'SP30']
+import { graduationTerms, olderRules, type Stage, stageOf, startingChoices } from './goals'
 const PROGRAMS = [
   { id: 'cs-eng', label: 'Engineering (B.S.)' },
   { id: 'cs-as', label: 'Arts & Sciences (B.A.)' },
@@ -20,6 +17,7 @@ FA24  CS 1110 / MATH 1910 / CHEM 2090 / FWS
 SP25  CS 211x, MATH 1920, PHYS 1112
 FA25  CS 2800 MATH 2940 PHYS 2213 ECON 1110
 SP26  CS 3110, CS 3410, ENGRD 2700 (4cr)`
+const THIS_TERM_PLACEHOLDER = 'CS 1110, MATH 1910, CHEM 2090, ENGRI 1101, FWS'
 
 const withTerm = (terms: string[], term: string) =>
   terms.includes(term) ? terms : [...terms, term].sort((a, b) => termIndex(a) - termIndex(b))
@@ -32,12 +30,27 @@ const issueLabel: Record<string, string> = {
   duplicate: 'Listed twice',
 }
 
-function Steps({ step }: { step: number }) {
-  const items = [
+const STEPS: Record<Stage, [string, string][]> = {
+  continuing: [
     ['Your coursework', 'Pasted from Student Center'],
     ['Check what we read', 'Nothing is planned until you confirm'],
     ['What you’re aiming for', 'Three optional questions'],
-  ]
+  ],
+  first: [
+    ['This semester', 'What you’re taking now'],
+    ['Check what we read', 'Nothing is planned until you confirm'],
+    ['What you’re aiming for', 'Three optional questions'],
+  ],
+  // nothing taken yet, so no coursework to check
+  incoming: [
+    ['Your program', 'Where you’re starting'],
+    ['What you’re aiming for', 'Three optional questions'],
+  ],
+}
+
+function Steps({ step, stage }: { step: number; stage: Stage }) {
+  const items = STEPS[stage]
+  if (stage === 'incoming') step = step === 2 ? 1 : 0
   return (
     <ol className="m-0 flex list-none flex-wrap gap-6 p-0">
       {items.map(([title, sub], i) => (
@@ -122,6 +135,7 @@ export default function OnboardingPage() {
   const qc = useQueryClient()
   const { data: me } = useMe()
   const signOut = useSignOut()
+  const { data: options } = useOnboardingOptions()
   const [start] = useState(() => startingChoices(me, PROGRAMS.map((p) => p.id)))
   const [step, setStep] = useState(0)
   const [program, setProgram] = useState(start.program)
@@ -150,16 +164,18 @@ export default function OnboardingPage() {
     }
   }
 
-  const confirm = async () => {
-    if (!parsed) return
-    const courses = parsed.courses.flatMap((c) => {
-      const choice = choices[c.id]
-      if (choice === 'drop' || c.issue?.kind === 'ap_credit') return []
-      if (c.issue?.kind === 'ambiguous_code' || c.issue?.kind === 'unknown_course')
-        return [{ term: c.term, code: choice }]
-      if (c.issue?.kind === 'credit_mismatch') return [{ term: c.term, code: c.code!, credits: Number(choice) }]
-      return c.code ? [{ term: c.term, code: c.code }] : []
-    })
+  const current = options?.current_term
+  const stage: Stage = current ? stageOf(entering, current) : 'continuing'
+  const rules = olderRules(entering, options?.rule_years[program] ?? [])
+
+  // a new start term moves graduation out to a standard eight semesters if it was sooner
+  const pickEntering = (term: string) => {
+    setEntering(term)
+    const eighth = termsAfter(term, undefined, 7).at(-1)!
+    if (termIndex(graduating) < termIndex(eighth)) setGraduating(eighth)
+  }
+
+  const save = async (courses: { term: string | null; code: string; credits?: number }[]) => {
     setBusy(true)
     setError(null)
     try {
@@ -176,6 +192,19 @@ export default function OnboardingPage() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const confirm = async () => {
+    if (!parsed) return
+    const courses = parsed.courses.flatMap((c) => {
+      const choice = choices[c.id]
+      if (choice === 'drop' || c.issue?.kind === 'ap_credit') return []
+      if (c.issue?.kind === 'ambiguous_code' || c.issue?.kind === 'unknown_course')
+        return [{ term: c.term, code: choice }]
+      if (c.issue?.kind === 'credit_mismatch') return [{ term: c.term, code: c.code!, credits: Number(choice) }]
+      return c.code ? [{ term: c.term, code: c.code }] : []
+    })
+    await save(courses)
   }
 
   const left = parsed ? parsed.courses.filter((c) => c.issue && choices[c.id] === undefined).length : 0
@@ -199,7 +228,7 @@ export default function OnboardingPage() {
         </Button>
       </header>
       <main className="mx-auto flex max-w-4xl flex-col gap-6 px-5 py-8">
-        <Steps step={step} />
+        <Steps step={step} stage={stage} />
 
         {step === 0 && (
           <section className="flex flex-col gap-5 rounded-xl border border-line bg-white p-5">
@@ -227,44 +256,67 @@ export default function OnboardingPage() {
             <div className="flex flex-wrap gap-6">
               <label htmlFor="onboarding-entering" className="flex flex-col gap-1">
                 <span className="font-semibold">First semester at Cornell</span>
-                <select id="onboarding-entering" value={entering} onChange={(e) => setEntering(e.target.value)} className="h-10 rounded-md border border-[#C3C9BC] bg-white px-2">
-                  {withTerm(ENTERING, start.entering).map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
+                <select id="onboarding-entering" value={entering} onChange={(e) => pickEntering(e.target.value)} className="h-10 rounded-md border border-[#C3C9BC] bg-white px-2">
+                  {withTerm(options?.entering_terms ?? [], start.entering).map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
                 </select>
               </label>
               <label htmlFor="onboarding-graduating" className="flex flex-col gap-1">
                 <span className="font-semibold">Expected graduation</span>
                 <select id="onboarding-graduating" value={graduating} onChange={(e) => setGraduating(e.target.value)} className="h-10 rounded-md border border-[#C3C9BC] bg-white px-2">
-                  {withTerm(GRADUATING, start.graduating).map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
+                  {withTerm(current ? graduationTerms(entering, current) : [], graduating).map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
                 </select>
               </label>
             </div>
             <p className="m-0 text-[13px] text-muted">
-              We check you against the CS requirements for your entering year, not this year’s.
+              {rules
+                ? `There are no separate rules for students starting in ${termLabel(entering, true)} yet, so we check you against the current CS requirements (for students who started in Fall ${rules.slice(0, 4)} or later).`
+                : 'We check you against the CS requirements for your entering year, not this year’s.'}
             </p>
-            <label className="flex flex-col gap-2">
-              <span className="font-semibold">Paste your courses</span>
-              <span className="text-[13px] text-muted">
-                Copy from Student Center or type them out. Messy is fine: one term per line works best.
-              </span>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                rows={8}
-                placeholder={PLACEHOLDER}
-                className="rounded-md border border-[#C3C9BC] p-3 font-mono text-[13px]"
-              />
-            </label>
-            {error && <p className="m-0 text-accent">{error}</p>}
-            <Button variant="primary" className="h-11 self-end" disabled={busy || !text.trim()} onClick={read}>
-              Read my courses
-            </Button>
+            {stage === 'incoming' ? (
+              <>
+                <p className="m-0 max-w-2xl">
+                  You start in {termLabel(entering, true)}, so there’s nothing to import. We’ll lay out every
+                  requirement as open slots across your semesters, and you fill them in as you go.
+                </p>
+                {error && <p className="m-0 text-accent">{error}</p>}
+                <Button variant="primary" className="h-11 self-end" disabled={busy || !current} onClick={() => save([])}>
+                  Build my plan
+                </Button>
+              </>
+            ) : (
+              <>
+                <label className="flex flex-col gap-2">
+                  <span className="font-semibold">
+                    {stage === 'first' ? `What are you taking in ${termLabel(entering, true)}?` : 'Paste your courses'}
+                  </span>
+                  <span className="text-[13px] text-muted">
+                    {stage === 'first'
+                      ? 'List your courses this semester, separated by commas or one per line. Add AP or transfer credit on its own line if you have any.'
+                      : 'Copy from Student Center or type them out. Messy is fine: one term per line works best.'}
+                  </span>
+                  <textarea
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    rows={stage === 'first' ? 4 : 8}
+                    placeholder={stage === 'first' ? THIS_TERM_PLACEHOLDER : PLACEHOLDER}
+                    className="rounded-md border border-[#C3C9BC] p-3 font-mono text-[13px]"
+                  />
+                </label>
+                {error && <p className="m-0 text-accent">{error}</p>}
+                <Button variant="primary" className="h-11 self-end" disabled={busy || !text.trim()} onClick={read}>
+                  Read my courses
+                </Button>
+              </>
+            )}
           </section>
         )}
 
         {step === 1 && parsed && (
           <section className="flex flex-col gap-4">
             <div>
-              <h1 className="m-0 text-2xl font-extrabold tracking-tight">Is this what you’ve taken?</h1>
+              <h1 className="m-0 text-2xl font-extrabold tracking-tight">
+                {stage === 'first' ? 'Is this what you’re taking?' : 'Is this what you’ve taken?'}
+              </h1>
               <p className="m-0 text-muted">
                 We matched {parsed.courses.filter((c) => c.code).length} courses against the Class Roster.{' '}
                 {left === 0 ? 'Everything is confirmed.' : left === 1 ? '1 thing needs you.' : `${left} things need you.`}
@@ -272,7 +324,9 @@ export default function OnboardingPage() {
             </div>
             {groups.map((g) => (
               <div key={g.term} className="rounded-xl border border-line bg-white">
-                <SectionLabel className="px-4 pt-3 pb-1">{g.term ? termLabel(g.term, true) : 'Before Cornell'}</SectionLabel>
+                <SectionLabel className="px-4 pt-3 pb-1">
+                  {g.term ? termLabel(g.term, true) : stage === 'first' ? termLabel(entering, true) : 'Before Cornell'}
+                </SectionLabel>
                 <ul className="m-0 list-none p-0">
                   {g.courses.map((c) => (
                     <Row key={c.id} course={c} choice={choices[c.id]} onChoose={(v) => setChoices((s) => ({ ...s, [c.id]: v }))} />
