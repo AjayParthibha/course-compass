@@ -303,30 +303,38 @@ class PlanModel:
             self._audit_objective(tops, reqs)
 
     def _audit_objective(self, tops: list[Lit], reqs: dict[str, Requirement]):
-        """Whole rules first, then met leaves, then progress on unmet ones (a course
-        counts as progress only up to what the rule needs), and no spare assignments:
-        a course that isn't needed anywhere stays unassigned."""
+        """Named course lists first (whole rules, then each course on a list), then whole
+        rules, then met leaves, then progress on unmet ones (a course counts as progress
+        only up to what the rule needs), and no spare assignments: a course that isn't
+        needed anywhere stays unassigned."""
         every = [a for pairs in self._counted.values() for _, a in pairs]
         progress = []
+        named_progress = []  # courses counted on a named list ("CS 3110"), up to its need
         for rid, pairs in self._counted.items():
             p = self.m.NewIntVar(0, needed(reqs[rid]), f"progress[{rid}]")
             self.m.Add(p <= sum(a for _, a in pairs))
             progress.append(p)
+            if reqs[rid].kind == "courses":
+                named_progress.append(p)
         w_progress = 2
         w_leaf = w_progress * len(every) + len(every) + 1
-        # between two plans meeting as many rules, prefer the one meeting rules made of
-        # named courses (the core, math): a broad elective can still be filled later
+        w_top = w_leaf * (len(self._leaf_sat) + 1) + w_progress * len(every) + 1
+        # a course on a named list (the core, math) counts there before it fills a broad
+        # elective, even when that leaves the elective short: the elective can take any of
+        # many other courses, so an unfinished plan shows its gap where a slot can fill it
         named = [lit for lit, top in zip(tops, self._tops, strict=True) if _named_only(top)]
-        w_named = w_leaf * (len(self._leaf_sat) + 1) + w_progress * len(every) + 1
-        w_top = w_named * (len(named) + 1)
+        w_named_course = w_top * (len(tops) + 1)
+        most = sum(needed(reqs[rid]) for rid in self._counted if reqs[rid].kind == "courses")
+        w_named = w_named_course * (most + 1)
         # last of all, credit for as many units as the overlaps allow, so the reported
         # credit total is the most the plan can earn
         w_rules = len(self._clashing) + 1
         self.m.Maximize(
             w_rules
             * (
-                w_top * sum(tops)
-                + w_named * sum(named)
+                w_named * sum(named)
+                + w_named_course * sum(named_progress)
+                + w_top * sum(tops)
                 + w_leaf * sum(self._leaf_sat)
                 + w_progress * sum(progress)
                 - sum(every)

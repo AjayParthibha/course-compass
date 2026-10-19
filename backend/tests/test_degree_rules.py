@@ -414,3 +414,20 @@ def test_every_prerequisite_equivalent_is_backed_by_the_roster(roster):
     for code, covers in roster.prereq_equivalents.items():
         for other in covers:
             assert other in roster.overlaps(code) or (code, other) in documented, (code, other)
+
+
+def test_named_courses_count_on_their_list_before_an_elective():
+    # CS 3110 and CS 3410 could make the elective whole, but the core names them; the
+    # elective is the one an open slot can fill, so that's where the gap shows
+    cat = Catalog([course("CS 3110", 4), course("CS 3410", 4), course("CS 4820", 4)])
+    core = Requirement(
+        id="core", label="Core", kind="courses", courses=["CS 3110", "CS 3410", "CS 4820"]
+    )
+    tech = Requirement(
+        id="tech", label="Tech", kind="filter", filter=CourseFilter(subjects=["CS"]), count=2
+    )
+    plan = [place("CS 3110"), place("CS 3410")]
+    st = statuses(plan, program(core, tech), cat)
+    assert st["core"].filled == ["CS 3110", "CS 3410"] and st["tech"].filled == []
+    out = seed_slots(plan, TERMS, "FA25", program(core, tech), cat)
+    assert sorted(p.slot for p in out if not p.course) == ["core", "tech", "tech"]
