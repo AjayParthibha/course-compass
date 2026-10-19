@@ -338,7 +338,7 @@ async def run_one(s: Scenario, mode: str) -> dict:
 
 
 async def run_all(
-    modes: list[str], scenarios: list[Scenario], progress: Path, repeats: int = 1
+    modes: list[str], scenarios: list[Scenario], progress: Path, repeats: int = 1, first: int = 1
 ) -> list[dict]:
     """One event loop for the whole run, so the OpenAI client isn't torn down between
     conversations. Repeats go round all modes in turn, so a slow or flaky stretch of the
@@ -346,7 +346,7 @@ async def run_all(
     with_repair = prompts.SYSTEM
     repair_tool = tools.REGISTRY["repair_plan"]
     rows = []
-    for rep in range(repeats):
+    for rep in range(first - 1, first - 1 + repeats):
         for mode in modes:
             if mode == "llm_direct":
                 tools.REGISTRY.pop("repair_plan", None)
@@ -355,7 +355,7 @@ async def run_all(
                 tools.REGISTRY["repair_plan"] = repair_tool
                 loop.SYSTEM = with_repair
             for s in scenarios:
-                print(f"running {s.id} · {mode} · repeat {rep + 1}/{repeats}", flush=True)
+                print(f"running {s.id} · {mode} · repeat {rep + 1}", flush=True)
                 row = {"repeat": rep + 1, **await run_one(s, mode)}
                 rows.append(row)
                 with progress.open("a") as f:
@@ -372,6 +372,8 @@ def main():
     parser.add_argument("--limit", type=int, help="run only the first N scenarios")
     parser.add_argument("--ids", nargs="+", help="run only these scenario ids")
     parser.add_argument("--repeats", type=int, default=1, help="run everything N times")
+    # to finish an interrupted run: number these repeats from N, then merge the files
+    parser.add_argument("--first-repeat", type=int, default=1)
     args = parser.parse_args()
     if not os.environ.get("OPENAI_API_KEY"):
         raise SystemExit("set OPENAI_API_KEY")
@@ -386,7 +388,7 @@ def main():
     stamp = f"{datetime.now():%Y%m%d-%H%M%S}"
     # every row is saved as it finishes, so a crash late in a paid run loses nothing
     progress = out_dir / f"{stamp}-advisor.jsonl"
-    rows = asyncio.run(run_all(args.modes, scenarios, progress, args.repeats))
+    rows = asyncio.run(run_all(args.modes, scenarios, progress, args.repeats, args.first_repeat))
 
     out = out_dir / f"{stamp}-advisor.csv"
     columns = list(dict.fromkeys(k for row in rows for k in row))
