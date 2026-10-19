@@ -741,6 +741,8 @@ export interface components {
             graduation_term: string;
             /** Courses */
             courses: components["schemas"]["ConfirmedCourse"][];
+            /** Max Credits */
+            max_credits?: number | null;
         };
         /** ConfirmedCourse */
         ConfirmedCourse: {
@@ -1064,6 +1066,11 @@ export interface components {
             courses: components["schemas"]["ParsedCourse"][];
             /** Catalog Year */
             catalog_year: string;
+            /**
+             * Unread
+             * @default []
+             */
+            unread: string[];
         };
         /** ParsedCourse */
         ParsedCourse: {
@@ -1080,6 +1087,8 @@ export interface components {
             /** Credits */
             credits: number | null;
             issue: components["schemas"]["Issue"] | null;
+            /** Note */
+            note: string | null;
         };
         /**
          * Placement

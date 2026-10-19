@@ -9,21 +9,41 @@ import uuid
 from app.catalog.store import Catalog, normalize_code
 from app.schemas.onboarding import Issue, IssueOption, ParsedCourse
 
-TERM = re.compile(r"\b(FA|SP|Fall|Spring)\s*'?(\d{2}|\d{4})\b", re.I)
-COURSE = re.compile(r"\b([A-Z]{2,5})\s*(\d{3}[0-9xX])\b")
+SEASON = r"(fall|spring|summer|winter|fa|sp|su|wi)"
+# "FA25", "Fall '25", "Spring 2026", and Student Center's year-first "2025 Fall"
+TERM = re.compile(rf"\b{SEASON}\s*'?(20\d{{2}}|\d{{2}})\b|\b(20\d{{2}})\s+{SEASON}\b", re.I)
+# any case ("cs 2800"); only subjects the roster has count, so words aren't read as codes
+COURSE = re.compile(r"\b([A-Za-z]{2,7})\s*(\d{3}[0-9xX])\b")
 CREDITS = re.compile(r"\(?\s*(\d)\s*(?:cr|credits?)\s*\)?", re.I)
 AP = re.compile(r"^\s*AP\s+(.+?)\s+(\d)\s*$", re.I)
+SEASONS = {"fa": "Fall", "sp": "Spring", "su": "Summer", "wi": "Winter"}
 
 
-def normalize_term(season: str, year: str) -> str:
-    s = "FA" if season.lower().startswith("f") else "SP"
-    return f"{s}{year[-2:]}"
+def normalize_term(season: str, year: str) -> tuple[str, str | None]:
+    """The plan term, and for a summer or winter session (plans have only fall and
+    spring) a note saying where it went: summer with the spring before it, winter
+    session (January) with the fall before it."""
+    name = SEASONS[season.lower()[:2]]
+    yy = int(year[-2:])
+    if name == "Summer":
+        return f"SP{yy:02d}", f"Taken in Summer 20{yy:02d}; counted with Spring 20{yy:02d}"
+    if name == "Winter":
+        return (
+            f"FA{yy - 1:02d}",
+            f"Taken in Winter 20{yy:02d}; counted with Fall 20{yy - 1:02d}",
+        )
+    return f"{name[:2].upper()}{yy:02d}", None
 
 
-def parse_history(text: str, catalog: Catalog) -> list[ParsedCourse]:
+def parse_history(text: str, catalog: Catalog) -> tuple[list[ParsedCourse], list[str]]:
+    """The courses read from pasted history, and the lines that look like they name a
+    course but couldn't be read."""
     rows: list[ParsedCourse] = []
+    unread: list[str] = []
     seen: dict[str, ParsedCourse] = {}
+    subjects = {code.split()[0] for code in catalog.courses}
     term = None
+    note = None
 
     for line in text.splitlines():
         if not line.strip():
@@ -51,17 +71,23 @@ def parse_history(text: str, catalog: Catalog) -> list[ParsedCourse]:
 
         m = TERM.search(line)
         if m:
-            term = normalize_term(m.group(1), m.group(2))
-        rest = line[m.end() :] if m else line
+            season, year = (m.group(1), m.group(2)) if m.group(1) else (m.group(4), m.group(3))
+            term, note = normalize_term(season, year)
+        rest = line[: m.start()] + " " + line[m.end() :] if m else line
 
+        found = len(rows)
         for cm in COURSE.finditer(rest):
-            raw = f"{cm.group(1)} {cm.group(2)}"
+            if cm.group(1).upper() not in subjects:
+                continue
+            raw = f"{cm.group(1).upper()} {cm.group(2)}"
             after = rest[cm.end() : cm.end() + 12]
             cr = CREDITS.match(after.strip())
             stated_credits = int(cr.group(1)) if cr else None
-            rows.append(_row(raw, term, stated_credits, catalog, seen))
+            row = _row(raw, term, stated_credits, catalog, seen)
+            row.note = note
+            rows.append(row)
 
-        if re.search(r"\bFWS\b", rest):
+        if re.search(r"\bFWS\b", rest, re.I):
             rows.append(
                 ParsedCourse(
                     id=_id(),
@@ -76,7 +102,10 @@ def parse_history(text: str, catalog: Catalog) -> list[ParsedCourse]:
                     ),
                 )
             )
-    return rows
+        # a number that could be a course, but nothing read: say so rather than drop it
+        if len(rows) == found and not m and re.search(r"\b(?!20\d\d\b)\d{4}\b", rest):
+            unread.append(line.strip())
+    return rows, unread
 
 
 def _row(raw: str, term, stated_credits, catalog: Catalog, seen: dict) -> ParsedCourse:

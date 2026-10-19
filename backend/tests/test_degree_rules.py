@@ -460,3 +460,47 @@ def test_the_ba_shares_the_engineering_cs_rules_except_math():
     # nothing in the BA may name a rule that only Engineering has
     ids = set(ba)
     assert all(other in ids for r in ba.values() for other in r.double_count)
+
+
+def test_starter_slots_follow_prerequisites_and_level():
+    def needs(code, before=None, credits=4):
+        c = course(code, credits)
+        return c.model_copy(update={"prereqs": CourseReq(code=before)}) if before else c
+
+    cat = Catalog(
+        [
+            needs("CS 1110"),
+            needs("CS 2110", "CS 1110"),
+            needs("CS 3110", "CS 2110"),
+            needs("CS 4820"),
+        ]
+    )
+    core = Requirement(
+        id="core", label="Core", kind="courses", courses=["CS 1110", "CS 2110", "CS 3110"]
+    )
+    e4000 = Requirement(
+        id="e4000",
+        label="4000+",
+        kind="filter",
+        filter=CourseFilter(subjects=["CS"], min_level=4000),
+    )
+    terms = ["FA25", "SP26", "FA26", "SP27", "FA27", "SP28"]
+    out = seed_slots([], terms, "FA25", program(core, e4000), cat)
+    # each core course a term after the one it needs; nothing goes in the current term
+    assert sorted(terms.index(p.term) for p in out if p.slot == "core") == [1, 2, 3]
+    # a 4000-level elective from the third year
+    assert [p.term for p in out if p.slot == "e4000"][0] in ("FA27", "SP28")
+
+
+def test_a_course_fills_the_specific_rule_before_a_catch_all():
+    # ENGRI 1101 could be the intro-to-engineering course or any elective; with nothing
+    # else to fill either, it goes to the rule only it can meet
+    cat = Catalog([course("ENGRI 1101")])
+    intro = Requirement(
+        id="intro", label="ENGRI", kind="filter", filter=CourseFilter(subjects=["ENGRI"])
+    )
+    elective = Requirement(
+        id="any", label="Elective", kind="filter", filter=CourseFilter(min_level=1100)
+    )
+    st = statuses([place("ENGRI 1101")], program(elective, intro), cat)
+    assert st["intro"].status == "done" and st["any"].status == "missing"

@@ -19,6 +19,8 @@ FA25  CS 2800 MATH 2940 PHYS 2213 ECON 1110
 SP26  CS 3110, CS 3410, ENGRD 2700 (4cr)`
 const THIS_TERM_PLACEHOLDER = 'CS 1110, MATH 1910, CHEM 2090, ENGRI 1101, FWS'
 
+type Confirmed = { term: string | null; code: string; credits?: number }
+
 const withTerm = (terms: string[], term: string) =>
   terms.includes(term) ? terms : [...terms, term].sort((a, b) => termIndex(a) - termIndex(b))
 
@@ -97,6 +99,7 @@ function Row({
           {!issue ? 'Matched' : resolved ? (choice === 'drop' ? 'Left out' : 'Confirmed') : issueLabel[issue.kind]}
         </span>
       </div>
+      {course.note && <span className="text-[12.5px] text-muted">{course.note}</span>}
       {issue && !resolved && (
         <div className="flex flex-col gap-2 rounded-lg bg-ground p-3">
           <span className="text-[13.5px]">{issue.message}</span>
@@ -146,6 +149,9 @@ export default function OnboardingPage() {
   const [choices, setChoices] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // confirmed courses wait here until the goals step, where the plan is built with the
+  // semester load the student picks
+  const [pending, setPending] = useState<Confirmed[]>([])
 
   const read = async () => {
     setBusy(true)
@@ -175,26 +181,24 @@ export default function OnboardingPage() {
     if (termIndex(graduating) < termIndex(eighth)) setGraduating(eighth)
   }
 
-  const save = async (courses: { term: string | null; code: string; credits?: number }[]) => {
-    setBusy(true)
-    setError(null)
-    try {
-      await unwrap(
-        api.POST('/api/onboarding/confirm', {
-          body: { program, entering_term: entering, graduation_term: graduating, courses },
-        }),
-      )
-      await qc.invalidateQueries({ queryKey: keys.me })
-      await qc.invalidateQueries({ queryKey: keys.plan })
-      setStep(2)
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
+  // builds the plan; errors surface on the goals step
+  const build = async (maxCredits?: number) => {
+    await unwrap(
+      api.POST('/api/onboarding/confirm', {
+        body: {
+          program,
+          entering_term: entering,
+          graduation_term: graduating,
+          courses: pending,
+          max_credits: maxCredits ?? null,
+        },
+      }),
+    )
+    await qc.invalidateQueries({ queryKey: keys.me })
+    await qc.invalidateQueries({ queryKey: keys.plan })
   }
 
-  const confirm = async () => {
+  const confirm = () => {
     if (!parsed) return
     const courses = parsed.courses.flatMap((c) => {
       const choice = choices[c.id]
@@ -204,7 +208,8 @@ export default function OnboardingPage() {
       if (c.issue?.kind === 'credit_mismatch') return [{ term: c.term, code: c.code!, credits: Number(choice) }]
       return c.code ? [{ term: c.term, code: c.code }] : []
     })
-    await save(courses)
+    setPending(courses)
+    setStep(2)
   }
 
   const left = parsed ? parsed.courses.filter((c) => c.issue && choices[c.id] === undefined).length : 0
@@ -279,8 +284,16 @@ export default function OnboardingPage() {
                   requirement as open slots across your semesters, and you fill them in as you go.
                 </p>
                 {error && <p className="m-0 text-accent">{error}</p>}
-                <Button variant="primary" className="h-11 self-end" disabled={busy || !current} onClick={() => save([])}>
-                  Build my plan
+                <Button
+                  variant="primary"
+                  className="h-11 self-end"
+                  disabled={!current}
+                  onClick={() => {
+                    setPending([])
+                    setStep(2)
+                  }}
+                >
+                  Continue
                 </Button>
               </>
             ) : (
@@ -334,6 +347,19 @@ export default function OnboardingPage() {
                 </ul>
               </div>
             ))}
+            {parsed.unread.length > 0 && (
+              <div role="status" className="flex flex-col gap-1.5 rounded-xl border border-line bg-highlight/30 px-4 py-3">
+                <span className="font-semibold">
+                  We couldn’t read {parsed.unread.length === 1 ? 'this line' : `these ${parsed.unread.length} lines`}
+                </span>
+                <ul className="m-0 flex list-none flex-col gap-0.5 p-0 font-mono text-[13px]">
+                  {parsed.unread.map((line, i) => <li key={i}>{line}</li>)}
+                </ul>
+                <span className="text-[13px] text-muted">
+                  If one of them is a course, go back and fix it (for example the subject and number, like CS 2110), then read again.
+                </span>
+              </div>
+            )}
             {error && <p className="m-0 text-accent">{error}</p>}
             <div className="flex items-center justify-between gap-3">
               <Button onClick={() => setStep(0)}>Back</Button>
@@ -345,7 +371,7 @@ export default function OnboardingPage() {
           </section>
         )}
 
-        {step === 2 && <GoalsStep />}
+        {step === 2 && <GoalsStep build={build} onBack={() => setStep(stage === 'incoming' ? 0 : 1)} />}
       </main>
     </div>
   )

@@ -61,6 +61,8 @@ requirements:
     kind: filter
     filter: {subjects: [ENGRI]}
     count: 1
+    # where the starter plan puts its slot, not a rule: part of the first-year curriculum
+    seed: earliest
 
   - id: fws
     label: First-year writing seminars

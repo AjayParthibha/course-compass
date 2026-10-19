@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useId, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { api, unwrap } from '../../api/client'
-import { keys, useUpdatePlanSettings } from '../../api/hooks'
+import { keys } from '../../api/hooks'
 import { Button } from '../../ui'
 import { AFTER, emptyGoals, factsToSupersede, goalFacts, type Goals, INTERESTS, LOADS } from './goals'
 
@@ -13,11 +13,20 @@ const chip =
 
 const textInput = 'h-10 rounded-md border border-[#C3C9BC] bg-white px-2'
 
-export default function GoalsStep() {
+/**
+ * The last onboarding step. The plan is built here, so the semester load the student picks
+ * shapes it; `build` creates it (with that credit limit) before the answers are saved.
+ */
+export default function GoalsStep({
+  build,
+  onBack,
+}: {
+  build: (maxCredits?: number) => Promise<void>
+  onBack: () => void
+}) {
   const id = useId()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const settings = useUpdatePlanSettings()
   const [goals, setGoals] = useState<Goals>(emptyGoals)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -26,11 +35,12 @@ export default function GoalsStep() {
   const facts = goalFacts(goals)
   const load = LOADS.find((l) => l.id === goals.load)
 
-  const finish = async () => {
+  const finish = async (answered: boolean) => {
     setBusy(true)
     setError(null)
     try {
-      if (facts.length) {
+      await build(answered ? load?.credits : undefined)
+      if (answered && facts.length) {
         const { facts: existing } = await unwrap(api.GET('/api/profile'))
         const have = new Set(
           existing.filter((f) => f.status === 'stated').map((f) => `${f.dimension}:${f.value}`),
@@ -47,7 +57,6 @@ export default function GoalsStep() {
           if (!have.has(`${body.dimension}:${body.value}`)) await unwrap(api.POST('/api/profile/facts', { body }))
         qc.invalidateQueries({ queryKey: keys.profile })
       }
-      if (load) await settings.mutateAsync({ max_credits: load.credits })
       navigate('/plan')
     } catch (e) {
       setError((e as Error).message)
@@ -60,8 +69,8 @@ export default function GoalsStep() {
       <div className="flex flex-col gap-1.5">
         <h1 id={`${id}-title`} className="m-0 text-2xl font-extrabold tracking-tight">What are you aiming for?</h1>
         <p className="m-0 max-w-2xl text-muted">
-          Your history is saved. These three questions help the advisor rank courses for you. Every one is
-          optional, and you can refine your answers any time by talking to the advisor.
+          Last step. These three questions help the advisor rank courses for you, and the semester load sets
+          how full your starter plan is. Every one is optional, and you can change your answers any time.
         </p>
       </div>
 
@@ -161,10 +170,13 @@ export default function GoalsStep() {
 
       {error && <p role="alert" className="m-0 font-semibold text-accent">{error}</p>}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-soft pt-4">
-        <Button className="h-11" disabled={busy} onClick={() => navigate('/plan')}>Skip for now</Button>
-        <Button variant="primary" className="h-11" disabled={busy || (!facts.length && !load)} onClick={finish}>
-          {busy ? 'Saving…' : 'Save and see my plan'}
-        </Button>
+        <Button className="h-11" disabled={busy} onClick={onBack}>Back</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button className="h-11" disabled={busy} onClick={() => finish(false)}>Skip questions</Button>
+          <Button variant="primary" className="h-11" disabled={busy} onClick={() => finish(true)}>
+            {busy ? 'Building your plan…' : 'Build my plan'}
+          </Button>
+        </div>
       </div>
     </section>
   )

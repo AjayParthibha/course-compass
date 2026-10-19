@@ -261,7 +261,7 @@ def test_shorten_graduation_keeps_placements(client, auth):
     onboard(client, auth)
     res = client.patch("/api/plan/settings", json={"graduation_term": "FA27"}, headers=auth)
     assert res.status_code == 409
-    assert "(Spring ’28: " in res.json()["detail"] and "4000+ electives" in res.json()["detail"]
+    assert "(Spring ’28: " in res.json()["detail"]
     assert client.get("/api/auth/me", headers=auth).json()["graduation_term"] == "SP28"
     assert client.get("/api/plan", headers=auth).json()["plan"]["terms"][-1] == "SP28"
 

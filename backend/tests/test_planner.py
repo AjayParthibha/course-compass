@@ -450,3 +450,17 @@ def test_removing_a_course_from_a_slot_reopens_the_slot(catalog):
 
     # removing the open slot itself takes it out of the plan
     assert apply_ops(reopened, [RemoveOp(placement_id="s")], catalog, TERMS) == []
+
+
+def test_history_reads_student_center_terms_any_case_and_summer(catalog):
+    from app.onboarding import parse_history
+
+    text = (
+        "2024 Fall\ncs 1110\nSpring 2025 CS 2110\nSummer 2025 CS 2800\nEC0N 1110 typo\nTotal 2024"
+    )
+    rows, unread = parse_history(text, catalog)
+    got = [(r.term, r.code) for r in rows]
+    assert got == [("FA24", "CS 1110"), ("SP25", "CS 2110"), ("SP25", "CS 2800")]
+    assert rows[2].note == "Taken in Summer 2025; counted with Spring 2025"
+    # a line that looks like it names a course but can't be read is reported, not dropped
+    assert unread == ["EC0N 1110 typo"]

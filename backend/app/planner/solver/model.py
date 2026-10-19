@@ -13,7 +13,7 @@ from typing import Literal
 
 from ortools.sat.python import cp_model
 
-from app.planner.audit import needed
+from app.planner.audit import fill_order, needed
 from app.planner.solver.units import Unit
 from app.schemas.courses import AllOf, AnyOf, CourseReq, Flag, PrereqExpr
 from app.schemas.requirements import Program, Requirement
@@ -318,7 +318,11 @@ class PlanModel:
                 named_progress.append(p)
         w_progress = 2
         w_leaf = w_progress * len(every) + len(every) + 1
-        w_top = w_leaf * (len(self._leaf_sat) + 1) + w_progress * len(every) + 1
+        # between plans meeting as many rules, prefer meeting the specific ones (ENGRI,
+        # liberal studies) over catch-all electives, which any spare course can fill
+        specific = [lit for lit, top in zip(tops, self._tops, strict=True) if fill_order(top) < 2]
+        w_specific = w_leaf * (len(self._leaf_sat) + 1) + w_progress * len(every) + 1
+        w_top = w_specific * (len(specific) + 1)
         # a course on a named list (the core, math) counts there before it fills a broad
         # elective, even when that leaves the elective short: the elective can take any of
         # many other courses, so an unfinished plan shows its gap where a slot can fill it
@@ -335,6 +339,7 @@ class PlanModel:
                 w_named * sum(named)
                 + w_named_course * sum(named_progress)
                 + w_top * sum(tops)
+                + w_specific * sum(specific)
                 + w_leaf * sum(self._leaf_sat)
                 + w_progress * sum(progress)
                 - sum(every)

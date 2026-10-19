@@ -44,7 +44,8 @@ def options(student: CurrentStudent) -> OnboardingOptions:
 @router.post("/parse")
 def parse(body: ParseRequest, student: CurrentStudent) -> ParseResult:
     year = _catalog_year(body.program, body.entering_term)
-    return ParseResult(courses=parse_history(body.text, get_catalog()), catalog_year=year)
+    courses, unread = parse_history(body.text, get_catalog())
+    return ParseResult(courses=courses, catalog_year=year, unread=unread)
 
 
 @router.post("/confirm")
@@ -60,6 +61,8 @@ def confirm(body: ConfirmRequest, db: DB, student: CurrentStudent) -> PlanState:
     student.program = body.program
     student.entering_term = body.entering_term
     student.graduation_term = body.graduation_term
+    if body.max_credits is not None:
+        student.max_credits = body.max_credits
     student.catalog_year = _catalog_year(body.program, body.entering_term)
     # caps only make sense for terms still in the (possibly new) plan
     student.term_caps = {t: c for t, c in (student.term_caps or {}).items() if t in terms}

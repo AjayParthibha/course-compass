@@ -1,7 +1,7 @@
 from typing import Literal
 
 from app.schemas.base import Schema
-from app.schemas.profile import Term
+from app.schemas.profile import CreditCap, Term
 
 IssueKind = Literal["ambiguous_code", "credit_mismatch", "ap_credit", "unknown_course", "duplicate"]
 
@@ -25,6 +25,8 @@ class ParsedCourse(Schema):
     title: str | None = None
     credits: int | None = None
     issue: Issue | None = None
+    # something to know about the row that needs no answer ("taken in Summer 2025")
+    note: str | None = None
 
 
 class OnboardingOptions(Schema):
@@ -44,6 +46,8 @@ class ParseRequest(Schema):
 class ParseResult(Schema):
     courses: list[ParsedCourse]
     catalog_year: str
+    # lines that look like they name a course but that nothing could be read from
+    unread: list[str] = []
 
 
 class ConfirmedCourse(Schema):
@@ -57,3 +61,5 @@ class ConfirmRequest(Schema):
     entering_term: Term
     graduation_term: Term
     courses: list[ConfirmedCourse]
+    # the semester load the student picked; the starter plan stays under it
+    max_credits: CreditCap | None = None
