@@ -47,6 +47,9 @@ class Student(Base):
     max_credits: Mapped[int] = mapped_column(default=18)
     # per-term overrides of max_credits, e.g. {"SP27": 15}
     term_caps: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)
+    # requirement ids whose advisor approval the student has (a mixed-subject
+    # external specialization); see Requirement.approval
+    approvals: Mapped[list[str]] = mapped_column(JSON, default=list)
     memory_enabled: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(default=now)
 

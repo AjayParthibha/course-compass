@@ -1,10 +1,22 @@
-# DRAFT, not verified. Courses that satisfy a prerequisite naming another course,
-# for roster text like "MATH 1110 or equivalent". One-directional: the key covers
-# the listed courses, not the other way round (MATH 1910 covers a MATH 1110
-# prerequisite; MATH 1110 does not cover MATH 1910).
+# Courses that satisfy a prerequisite naming another course, for roster text like
+# "MATH 1110 or equivalent". One-directional: the key covers the listed courses, not
+# the other way round (MATH 1910 covers a MATH 1110 prerequisite; MATH 1110 does not
+# cover MATH 1910).
 #
-# Used only when checking prerequisites. Degree requirements and duplicate
-# detection ignore this file, so it can't make one course count twice.
+# Each pair is backed by the roster (checked against the 2026-10-05 snapshot; the test
+# in backend/tests/test_degree_rules.py keeps it that way):
+#   - a forbidden overlap: the two courses cover the same material, so the roster gives
+#     credit for only one (MATH 1910 / MATH 1120, MATH 1920 / MATH 2220, MATH 2940 /
+#     MATH 2210, CS 1110 / CS 1112)
+#   - MATH 1910 -> MATH 1110: MATH 1910's description says it "assumes familiarity with
+#     differential calculus at the level of MATH 1110"
+#
+# Forbidden overlaps aren't turned into equivalents wholesale: some groups mix levels
+# (PHYS 1101, an algebra-based course, overlaps PHYS 1112; PSYCH 2500 overlaps ENGRD
+# 2700), so an overlap alone doesn't mean one course prepares you for the other's sequels.
+#
+# Used only when checking prerequisites. Degree requirements and duplicate detection
+# ignore this file, so it can't make one course count twice.
 
 # Engineering math sequence vs. the A&S sequence
 MATH 1910: [MATH 1110, MATH 1120]

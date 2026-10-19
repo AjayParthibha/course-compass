@@ -27,7 +27,8 @@ def plan_context(term: str, placements: list[Placement], catalog: Catalog) -> Pl
     for p in placements:
         if not p.course:
             continue
-        in_plan |= catalog.equivalents(p.course)
+        # a course that would earn no credit beside one in the plan isn't worth suggesting
+        in_plan |= catalog.equivalents(p.course) | catalog.overlaps(p.course)
         if p.status == "completed" or term_index(p.term) < idx:
             before |= catalog.prereq_credit(p.course)
     return PlanContext(before, in_plan)

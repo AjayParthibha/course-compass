@@ -44,6 +44,7 @@ def student_schema(st: models.Student) -> Student:
         graduation_term=st.graduation_term,
         max_credits=st.max_credits,
         term_caps=st.term_caps or {},
+        approvals=st.approvals or [],
         memory_enabled=st.memory_enabled,
         onboarded=bool(st.plans),
     )
@@ -52,7 +53,7 @@ def student_schema(st: models.Student) -> Student:
 def program_for(st: models.Student):
     if not (st.program and st.catalog_year):
         raise NotReady
-    return get_program(st.program, st.catalog_year)
+    return get_program(st.program, st.catalog_year).with_approvals(st.approvals or [])
 
 
 def slot_labels(st: models.Student) -> dict[str, str]:

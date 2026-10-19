@@ -571,3 +571,21 @@ def test_repair_tool_reports_back(client, auth):
         assert ok.data["withdrew_earlier_drafts"] == [draft.data["id"]]
         row = services.get_proposal(db, student, draft.data["id"])
         assert row.status == "discarded"
+
+
+def test_advisor_approval_relaxes_the_one_subject_rule(client, auth):
+    onboard(client, auth)
+    term = "FA26"
+    before = client.get(f"/api/slots/ext/candidates?term={term}", headers=auth).json()
+    assert before["same_subject"] and before["approval"]["approved"] is False
+
+    res = client.put("/api/profile/approvals/ext", json={"approved": True}, headers=auth)
+    assert res.status_code == 200 and res.json()["approvals"] == ["ext"]
+    after = client.get(f"/api/slots/ext/candidates?term={term}", headers=auth).json()
+    assert not after["same_subject"] and after["approval"]["approved"] is True
+
+    res = client.put("/api/profile/approvals/ext", json={"approved": False}, headers=auth)
+    assert res.json()["approvals"] == []
+    # only rules that allow an approval can record one
+    res = client.put("/api/profile/approvals/core", json={"approved": True}, headers=auth)
+    assert res.status_code == 404

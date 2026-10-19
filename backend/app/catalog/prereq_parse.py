@@ -11,25 +11,27 @@ import re
 
 from app.schemas.courses import AllOf, AnyOf, CourseReq, Flag, PrereqExpr
 
-CODE = re.compile(r"\b([A-Z]{2,5})\s*(\d{4})\b")
+CODE = re.compile(r"\b([A-Z]{2,7})\s*(\d{4})\b")
 BARE_NUMBER = re.compile(r"(?:\bor|\band|,|/)\s*(\d{4})\b")
 LABEL = re.compile(
     r"^\s*(prerequisites?|corequisites?|prereq|coreq)\s*(or corequisite)?\s*:\s*", re.I
 )
+# an alternative open only by exception, not a route a plan can follow
+EXCEPTION = re.compile(r"permission|consent|standing", re.I)
 MEANINGFUL = re.compile(r"permission|standing|consent|enrollment|majors?|grade", re.I)
 # "Recommended prerequisite: X" and everything after it is advice, not a requirement
 RECOMMENDED = re.compile(r"(strongly\s+)?recommended(\s+(pre|co)requisites?)?\s*:", re.I)
 GROUP = re.compile(r"\(([^()]*)\)")
 TOKEN = re.compile(r"@(\d+)@")
-SLASH = re.compile(r"(?<=\d)\s*/\s*(?=[A-Z]{2,5}\s*\d{4}|\d{4})")
+SLASH = re.compile(r"(?<=\d)\s*/\s*(?=[A-Z]{2,7}\s*\d{4}|\d{4})")
 # "A, B, or C": an Oxford-comma list that ends in a course is a list of alternatives
-OXFORD_OR = re.compile(r",\s*or\s+(@\d+@|[A-Z]{2,5}\s*\d{4})")
-OXFORD_CLOSE = re.compile(r"\s*or\s+(@\d+@|[A-Z]{2,5}\s*\d{4})")
+OXFORD_OR = re.compile(r",\s*or\s+(@\d+@|[A-Z]{2,7}\s*\d{4})")
+OXFORD_CLOSE = re.compile(r"\s*or\s+(@\d+@|[A-Z]{2,7}\s*\d{4})")
 EQUIVALENT = re.compile(r"\s*or\s+(the\s+)?equivalents?\b")
 ONE_OF = re.compile(r"\bsuch as\b|\bone of\b", re.I)
 AND = re.compile(r"\band\b")
 # "MATH 2210-MATH 2220": a two-course sequence, both needed
-PAIR = re.compile(r"\b([A-Z]{2,5})\s*(\d{4})\s*[-–]\s*([A-Z]{2,5})\s*(\d{4})\b")
+PAIR = re.compile(r"\b([A-Z]{2,7})\s*(\d{4})\s*[-–]\s*([A-Z]{2,7})\s*(\d{4})\b")
 # a sentence ending in "... recommended" is advice, not a requirement
 ADVICE = re.compile(r"[^.]*\brecommended\s*(\.|$)", re.I)
 # "A or equivalent with B also recommended": only the "with ..." part is advice
@@ -247,7 +249,12 @@ def parse_text(text: str, concurrent: bool = False) -> PrereqExpr | None:
         expr = _parse_clause(part, concurrent)
         if expr is not None:
             alternatives[-1].append(expr)
-    return _simplify("any", [e for alt in alternatives if (e := _simplify("all", alt))])
+    options = [e for alt in alternatives if (e := _simplify("all", alt))]
+    # "CS 2110; CS 2800; or permission of instructor": plan the usual route. Kept as an
+    # alternative, the flag would make the whole prerequisite always pass; it's dropped
+    # the same way "CS 3110 or permission of instructor" is read as CS 3110
+    usual = [e for e in options if not (isinstance(e, Flag) and EXCEPTION.search(e.text))]
+    return _simplify("any", usual or options)
 
 
 def parse(prereq_text: str, coreq_text: str = "") -> PrereqExpr | None:

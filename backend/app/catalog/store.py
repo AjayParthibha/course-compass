@@ -6,9 +6,10 @@ from pathlib import Path
 import yaml
 from pydantic import TypeAdapter
 
+from app.catalog.overlaps import overlap_pairs
 from app.catalog.prereq_parse import parse
 from app.config import get_settings
-from app.schemas.courses import Course, PrereqExpr
+from app.schemas.courses import AllOf, AnyOf, Course, CourseReq, PrereqExpr
 
 _expr = TypeAdapter(PrereqExpr)
 
@@ -29,6 +30,12 @@ class Catalog:
         self.prereq_equivalents = prereq_equivalents or {}
         # ORIE -> Operations Research & Information Engineering
         self.subject_names = subject_names or {}
+        # course -> courses the roster says a student can't also get credit for
+        self._overlaps: dict[str, set[str]] = {}
+        for c in courses:
+            for a, b in overlap_pairs(c.forbidden_overlaps):
+                self._overlaps.setdefault(a, set()).add(b)
+                self._overlaps.setdefault(b, set()).add(a)
 
     def subject_name(self, subject: str) -> str:
         return self.subject_names.get(subject, subject)
@@ -42,6 +49,17 @@ class Catalog:
     def equivalents(self, code: str) -> set[str]:
         course = self.get(code)
         return {code, *course.cross_listed} if course else {code}
+
+    def overlaps(self, code: str) -> set[str]:
+        """Courses that earn no credit alongside this one (the roster's forbidden
+        overlaps), with their cross-listings. Never the course itself: taking the same
+        course twice is a duplicate, which `equivalents` already catches."""
+        same = self.equivalents(code)
+        out: set[str] = set()
+        for c in same:
+            for other in self._overlaps.get(c, ()):
+                out |= self.equivalents(other)
+        return out - same
 
     def prereq_credit(self, code: str) -> set[str]:
         """Every course code whose prerequisite this course satisfies: itself, its
@@ -104,12 +122,30 @@ class Catalog:
             else:
                 course.prereqs = parse(course.prereq_text, course.coreq_text)
             courses.append(course)
+        # roster text sometimes names the course itself or a cross-listing ("PUBPOL 3380;
+        # ECON 1110-ECON 3120", PMA 3300 needing its cross-listing PMA 2300), which no
+        # plan could satisfy; those parts are dropped
+        for course in courses:
+            same = {course.code, *course.cross_listed}
+            course.prereqs = _without(course.prereqs, same)
         equivalents = {}
         if equivalents_file and equivalents_file.exists():
             equivalents = yaml.safe_load(equivalents_file.read_text()) or {}
         names_file = snapshot_dir / "subjects.json"
         names = json.loads(names_file.read_text()) if names_file.exists() else {}
         return cls(courses, equivalents, names)
+
+
+def _without(expr: PrereqExpr | None, codes: set[str]) -> PrereqExpr | None:
+    """The expression with requirements for `codes` taken out."""
+    if isinstance(expr, CourseReq):
+        return None if expr.code in codes else expr
+    if isinstance(expr, AllOf | AnyOf):
+        items = [e for e in (_without(i, codes) for i in expr.items) if e is not None]
+        if len(items) <= 1:
+            return items[0] if items else None
+        return expr.model_copy(update={"items": items})
+    return expr
 
 
 def normalize_code(code: str) -> str:

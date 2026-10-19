@@ -73,7 +73,7 @@ CS 2800:
         concurrent: false
         kind: course
       kind: any
-    kind: any
+    kind: all
   reviewed: false
   text: MATH 1110; CS 1110 or CS 1112; or equivalents.
 CS 3110:
@@ -97,7 +97,7 @@ CS 3152:
       concurrent: false
       kind: course
     - code: ENGRC 3152
-      concurrent: false
+      concurrent: true
       kind: course
     kind: all
   reviewed: false
@@ -151,9 +151,7 @@ CS 3700:
     - code: CS 2800
       concurrent: false
       kind: course
-    - kind: flag
-      text: permission of instructor
-    kind: any
+    kind: all
   reviewed: false
   text: CS 2110 or ENGRD 2110; CS 2800; or permission of instructor.
 CS 3780:
@@ -225,10 +223,10 @@ CS 4120:
       - code: CS 3410
         concurrent: false
         kind: course
-      - code: CS 4121
-        concurrent: false
-        kind: course
       kind: any
+    - code: CS 4121
+      concurrent: true
+      kind: course
     kind: all
   reviewed: false
   text: 'CS 3110 or permission of instructor, and CS 3420 or CS 3410. Corequisite: CS 4121.'
@@ -260,10 +258,10 @@ CS 4152:
       - code: CS 5414
         concurrent: false
         kind: course
-      - code: ENGRC 4152
-        concurrent: false
-        kind: course
       kind: any
+    - code: ENGRC 4152
+      concurrent: true
+      kind: course
     kind: all
   reviewed: false
   text: 'CS 3152, CS 3300 or CS 3700 or CS 4620 or CS 5414. Corequisite: ENGRC 4152.'
@@ -277,25 +275,32 @@ CS 4160:
   text: CS 3110 or permission of instructor.
 CS 4210:
   coreq_text: null
+  note: the 3000-level MATH course can't be checked automatically
   parsed:
     items:
-    - code: MATH 2210
-      concurrent: false
-      kind: course
-    - code: MATH 2230
-      concurrent: false
-      kind: course
-    - code: MATH 2240
-      concurrent: false
-      kind: course
-    - code: MATH 2310
-      concurrent: false
-      kind: course
-    - code: MATH 2940
-      concurrent: false
-      kind: course
-    kind: any
-  reviewed: false
+    - items:
+      - code: MATH 2210
+        concurrent: false
+        kind: course
+      - items:
+        - code: MATH 2230
+          concurrent: false
+          kind: course
+        - code: MATH 2240
+          concurrent: false
+          kind: course
+        kind: all
+      - code: MATH 2310
+        concurrent: false
+        kind: course
+      - code: MATH 2940
+        concurrent: false
+        kind: course
+      kind: any
+    - kind: flag
+      text: a 3000 level or above MATH course
+    kind: all
+  reviewed: true
   text: MATH 2210 or MATH 2230-MATH 2240 or MATH 2310 or MATH 2940 or equivalent; a 3000 level or above
     MATH course.
 CS 4220:
@@ -313,24 +318,27 @@ CS 4220:
   text: MATH 2210 or MATH 2940 or equivalent.
 CS 4300:
   coreq_text: null
+  note: INFO 2950 can replace the linear algebra and discrete math parts; it isn't needed on top of them
   parsed:
     items:
-    - code: MATH 2940
-      concurrent: false
-      kind: course
     - items:
-      - code: CS 2800
-        concurrent: false
-        kind: course
+      - items:
+        - code: MATH 2940
+          concurrent: false
+          kind: course
+        - code: CS 2800
+          concurrent: false
+          kind: course
+        kind: all
       - code: INFO 2950
         concurrent: false
         kind: course
-      kind: all
+      kind: any
     - code: CS 2110
       concurrent: false
       kind: course
     kind: all
-  reviewed: false
+  reviewed: true
   text: '1) Linear algebra: strong performance in MATH 2940 or equivalent; 2) Discrete math: strong performance
     in CS 2800 or equivalent. Note: The linear algebra and discrete math requirements can also be fulfilled
     with a strong performance in INFO 2950; and 3) Programming proficiency: CS 2110 or equivalent with
@@ -353,10 +361,10 @@ CS 4321:
   parsed:
     items:
     - code: CS 4320
-      concurrent: false
+      concurrent: true
       kind: course
     - code: CS 5320
-      concurrent: false
+      concurrent: true
       kind: course
     kind: any
   reviewed: false
@@ -392,7 +400,7 @@ CS 4414:
     - code: CS 3410
       concurrent: false
       kind: course
-    kind: any
+    kind: all
   reviewed: false
   text: CS 2110; CS 3410; or equivalents.
 CS 4420:
@@ -442,14 +450,14 @@ CS 4620:
         concurrent: false
         kind: course
       kind: any
-    kind: any
+    kind: all
   reviewed: false
   text: CS 2110 or ENGRD 2110; MATH 1910 or MATH 1120; MATH 2940 or MATH 2210 or MATH 2310; or equivalents.
 CS 4621:
   coreq_text: null
   parsed:
     code: CS 4620
-    concurrent: false
+    concurrent: true
     kind: course
   reviewed: false
   text: 'or corequisites: CS 4620.'
@@ -547,43 +555,31 @@ CS 4701:
   text: CS 3700 or CS 3780 or CS 4670 or CS 4740 or ECE 4200 or ORIE 3741 or STSCI 3740 or equivalent.
 CS 4744:
   coreq_text: null
+  note: the roster gives CS majors their own prerequisite; the other one is for non-majors
   parsed:
     items:
-    - items:
-      - code: CS 1133
-        concurrent: false
-        kind: course
-      - items:
-        - code: CS 2800
-          concurrent: false
-          kind: course
-        - code: CS 1133
-          concurrent: false
-          kind: course
-        kind: any
-      kind: all
-    - items:
-      - code: LING 1101
-        concurrent: false
-        kind: course
-      - code: CS 2800
-        concurrent: false
-        kind: course
-      - code: PHIL 2310
-        concurrent: false
-        kind: course
-      kind: any
+    - code: CS 1133
+      concurrent: false
+      kind: course
+    - code: CS 2800
+      concurrent: false
+      kind: course
     kind: all
-  reviewed: false
+  reviewed: true
   text: 'for Computer Science majors: CS 1133 and CS 2800. Prerequisites for others: CS 1133 or equivalent;
     LING 1101 or CS 2800 or PHIL 2310.'
 CS 4745:
   coreq_text: null
+  note: the second linguistics course can't be checked automatically
   parsed:
-    code: LING 4424
-    concurrent: false
-    kind: course
-  reviewed: false
+    items:
+    - code: LING 4424
+      concurrent: false
+      kind: course
+    - kind: flag
+      text: one other 3000 level or above linguistics course
+    kind: all
+  reviewed: true
   text: LING 4424 and one other 3000 level or above linguistics course.
 CS 4750:
   coreq_text: null
@@ -604,7 +600,7 @@ CS 4750:
     - code: MATH 2940
       concurrent: false
       kind: course
-    kind: any
+    kind: all
   reviewed: false
   text: CS 1112; CS 2110; CS 2800; MATH 1920; MATH 2940; or equivalents.
 CS 4756:
@@ -614,18 +610,20 @@ CS 4756:
     - code: CS 2800
       concurrent: false
       kind: course
-    - code: BTRY 3080
-      concurrent: false
-      kind: course
-    - code: ECON 3130
-      concurrent: false
-      kind: course
-    - code: MATH 4710
-      concurrent: false
-      kind: course
-    - code: ENGRD 2700
-      concurrent: false
-      kind: course
+    - items:
+      - code: BTRY 3080
+        concurrent: false
+        kind: course
+      - code: ECON 3130
+        concurrent: false
+        kind: course
+      - code: MATH 4710
+        concurrent: false
+        kind: course
+      - code: ENGRD 2700
+        concurrent: false
+        kind: course
+      kind: any
     - code: MATH 2940
       concurrent: false
       kind: course
@@ -668,18 +666,20 @@ CS 4780:
     - code: CS 2800
       concurrent: false
       kind: course
-    - code: BTRY 3080
-      concurrent: false
-      kind: course
-    - code: ECON 3130
-      concurrent: false
-      kind: course
-    - code: MATH 4710
-      concurrent: false
-      kind: course
-    - code: ENGRD 2700
-      concurrent: false
-      kind: course
+    - items:
+      - code: BTRY 3080
+        concurrent: false
+        kind: course
+      - code: ECON 3130
+        concurrent: false
+        kind: course
+      - code: MATH 4710
+        concurrent: false
+        kind: course
+      - code: ENGRD 2700
+        concurrent: false
+        kind: course
+      kind: any
     - code: MATH 2940
       concurrent: false
       kind: course
@@ -880,7 +880,7 @@ CS 4860:
     - code: MATH 2940
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: MATH 2210, MATH 2230, MATH 2310, MATH 2940, or equivalent.
 CS 5110:
@@ -918,10 +918,10 @@ CS 5120:
       - code: CS 3410
         concurrent: false
         kind: course
-      - code: CS 5121
-        concurrent: false
-        kind: course
       kind: any
+    - code: CS 5121
+      concurrent: true
+      kind: course
     kind: all
   reviewed: false
   text: 'CS 3110 or permission of instructor, CS 3420 or CS 3410. Corequisite: CS 5121.'
@@ -961,10 +961,10 @@ CS 5152:
       - code: CS 5414
         concurrent: false
         kind: course
-      - code: ENGRC 5152
-        concurrent: false
-        kind: course
       kind: any
+    - code: ENGRC 5152
+      concurrent: true
+      kind: course
     kind: all
   reviewed: false
   text: 'CS 3152, CS 3300 or CS 4620 or CS 3700 or CS 5414. Corequisite: ENGRC 5152.'
@@ -983,6 +983,7 @@ CS 5154:
   text: 'for Computer Science majors: CS 3110 or CS 4120.'
 CS 5160:
   coreq_text: null
+  note: proof can come from CS 2800 or a 3000+ math course
   parsed:
     items:
     - code: CS 3110
@@ -991,11 +992,15 @@ CS 5160:
     - code: CS 2110
       concurrent: false
       kind: course
-    - code: CS 2800
-      concurrent: false
-      kind: course
+    - items:
+      - code: CS 2800
+        concurrent: false
+        kind: course
+      - kind: flag
+        text: a mathematics course numbered 3000 or above
+      kind: any
     kind: all
-  reviewed: false
+  reviewed: true
   text: CS 3110 or permission of instructor, proficiency with programming (e.g. CS 2110), and proof (e.g.
     CS 2800 or a mathematics course numbered 3000 or above).
 CS 5220:
@@ -1055,7 +1060,7 @@ CS 5321:
   coreq_text: null
   parsed:
     code: CS 5320
-    concurrent: false
+    concurrent: true
     kind: course
   reviewed: false
   text: 'or corequisites: CS 5320.'
@@ -1069,7 +1074,7 @@ CS 5322:
     - code: CS 5320
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: CS 4320/5320.
 CS 5356:
@@ -1224,7 +1229,7 @@ CS 5621:
   coreq_text: null
   parsed:
     code: CS 5620
-    concurrent: false
+    concurrent: true
     kind: course
   reviewed: false
   text: 'or corequisites: CS 5620.'
@@ -1238,7 +1243,7 @@ CS 5630:
     - code: CS 5620
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: CS 4620/CS 5620.
 CS 5643:
@@ -1255,7 +1260,7 @@ CS 5643:
       - code: MATH 1920
         concurrent: false
         kind: course
-      kind: all
+      kind: any
     - items:
       - code: MATH 2210
         concurrent: false
@@ -1263,7 +1268,7 @@ CS 5643:
       - code: MATH 2940
         concurrent: false
         kind: course
-      kind: all
+      kind: any
     - code: PHYS 1112
       concurrent: false
       kind: course
@@ -1324,7 +1329,7 @@ CS 5701:
     - code: CS 4780
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: "Prerequisite:\_CS 4670, CS 4700,\_CS 4740, or\_CS 4780."
 CS 5726:
@@ -1374,18 +1379,20 @@ CS 5756:
     - code: CS 2800
       concurrent: false
       kind: course
-    - code: BTRY 3010
-      concurrent: false
-      kind: course
-    - code: ECON 3130
-      concurrent: false
-      kind: course
-    - code: MATH 4710
-      concurrent: false
-      kind: course
-    - code: ENGRD 2700
-      concurrent: false
-      kind: course
+    - items:
+      - code: BTRY 3010
+        concurrent: false
+        kind: course
+      - code: ECON 3130
+        concurrent: false
+        kind: course
+      - code: MATH 4710
+        concurrent: false
+        kind: course
+      - code: ENGRD 2700
+        concurrent: false
+        kind: course
+      kind: any
     - code: MATH 2940
       concurrent: false
       kind: course
@@ -1418,7 +1425,7 @@ CS 5777:
     - code: CS 2110
       concurrent: false
       kind: course
-    kind: any
+    kind: all
   reviewed: false
   text: CS 3780 or CS 5780; CS 2110; or equivalents.
 CS 5780:
@@ -1533,16 +1540,21 @@ CS 5814:
   text: 'background equivalent to: CS 4820.'
 CS 5830:
   coreq_text: null
+  note: CS 4810 or mathematical maturity
   parsed:
     items:
     - code: CS 2800
       concurrent: false
       kind: course
-    - code: CS 4810
-      concurrent: false
-      kind: course
+    - items:
+      - code: CS 4810
+        concurrent: false
+        kind: course
+      - kind: flag
+        text: mathematical maturity
+      kind: any
     kind: all
-  reviewed: false
+  reviewed: true
   text: CS 2800 or equivalent, CS 4810 or mathematical maturity, or permission of instructor.
 CS 5850:
   coreq_text: null
@@ -1631,7 +1643,7 @@ CS 6158:
         concurrent: false
         kind: course
       kind: any
-    kind: any
+    kind: all
   reviewed: false
   text: CS 3110 or CS 4120 or CS 5154; CS 3780 or  CS 4740 or CS 4782; or equivalents.
 CS 6172:
@@ -1652,9 +1664,7 @@ CS 6172:
         concurrent: false
         kind: course
       kind: any
-    - kind: flag
-      text: permission of instructor
-    kind: any
+    kind: all
   reviewed: false
   text: CS 3110; CS 3700; CS 3780 or CS 5780; or permission of instructor.
 CS 6241:
@@ -1752,7 +1762,7 @@ CS 6682:
     - code: CS 2112
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: Python, MATH 2210, CS 2110, or CS 2112.
 CS 6700:

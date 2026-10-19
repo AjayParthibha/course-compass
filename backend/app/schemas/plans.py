@@ -79,7 +79,14 @@ PlanOp = Annotated[AddOp | RemoveOp | MoveOp | ReplaceOp | LockOp, Field(discrim
 AdvisorOp = Annotated[AddOp | RemoveOp | MoveOp | ReplaceOp, Field(discriminator="op")]
 
 ViolationKind = Literal[
-    "prereq", "coreq", "credits_high", "credits_low", "offering", "duplicate", "unknown_course"
+    "prereq",
+    "coreq",
+    "credits_high",
+    "credits_low",
+    "offering",
+    "duplicate",
+    "no_credit",
+    "unknown_course",
 ]
 
 
@@ -100,6 +107,9 @@ class RequirementStatus(Schema):
     # so the UI can tell "chosen" apart from "room left in the plan"
     open_slots: int = 0
     children: list[RequirementStatus] = []
+    # for credit-total requirements (123 credits): credits counted so far and needed
+    credits: int | None = None
+    credits_needed: int | None = None
 
 
 class AuditResult(Schema):

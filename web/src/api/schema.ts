@@ -250,6 +250,27 @@ export interface paths {
         patch: operations["update_student_api_profile_student_patch"];
         trace?: never;
     };
+    "/api/profile/approvals/{requirement_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Approval
+         * @description Record (or withdraw) an advisor's approval for a rule that allows one, such as an
+         *     external specialization mixing subjects. The audit then applies the relaxed rule.
+         */
+        put: operations["set_approval_api_profile_approvals__requirement_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/profile/facts": {
         parameters: {
             query?: never;
@@ -591,6 +612,21 @@ export interface components {
             items: (components["schemas"]["CourseReq"] | components["schemas"]["AllOf"] | components["schemas"]["AnyOf"] | components["schemas"]["Flag"])[];
         };
         /**
+         * ApprovalState
+         * @description An exception the catalog lets an advisor approve for this rule.
+         */
+        ApprovalState: {
+            /** Label */
+            label: string;
+            /** Approved */
+            approved: boolean;
+        };
+        /** ApprovalUpdate */
+        ApprovalUpdate: {
+            /** Approved */
+            approved: boolean;
+        };
+        /**
          * Area
          * @description One subject a same-subject rule could be filled from.
          */
@@ -755,6 +791,11 @@ export interface components {
              * @default
              */
             coreq_text: string;
+            /**
+             * Forbidden Overlaps
+             * @default
+             */
+            forbidden_overlaps: string;
             /** Prereqs */
             prereqs: (components["schemas"]["CourseReq"] | components["schemas"]["AllOf"] | components["schemas"]["AnyOf"] | components["schemas"]["Flag"]) | null;
             /**
@@ -1487,6 +1528,10 @@ export interface components {
              * @default []
              */
             children: components["schemas"]["RequirementStatus"][];
+            /** Credits */
+            credits: number | null;
+            /** Credits Needed */
+            credits_needed: number | null;
         };
         /** ReviewSummary */
         ReviewSummary: {
@@ -1527,6 +1572,7 @@ export interface components {
             };
             /** Areas */
             areas: components["schemas"]["Area"][];
+            approval: components["schemas"]["ApprovalState"] | null;
         };
         /** SlotCandidates */
         SlotCandidates: {
@@ -1567,6 +1613,7 @@ export interface components {
              * @default []
              */
             blocked: components["schemas"]["BlockedCourse"][];
+            approval: components["schemas"]["ApprovalState"] | null;
         };
         /**
          * SolverSummary
@@ -1614,6 +1661,11 @@ export interface components {
             term_caps: {
                 [key: string]: number;
             };
+            /**
+             * Approvals
+             * @default []
+             */
+            approvals: string[];
             /** Memory Enabled */
             memory_enabled: boolean;
             /** Onboarded */
@@ -1707,7 +1759,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "prereq" | "coreq" | "credits_high" | "credits_low" | "offering" | "duplicate" | "unknown_course";
+            kind: "prereq" | "coreq" | "credits_high" | "credits_low" | "offering" | "duplicate" | "no_credit" | "unknown_course";
             /** Message */
             message: string;
             /**
@@ -2165,6 +2217,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["StudentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Student"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_approval_api_profile_approvals__requirement_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalUpdate"];
             };
         };
         responses: {

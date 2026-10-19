@@ -65,10 +65,19 @@ def test_parse_plain_commas_still_mean_and():
 
 
 def test_parse_semicolon_parts_are_and_until_or():
+    # the permission route is an exception, not an alternative a plan can follow; kept,
+    # it would make the whole prerequisite always pass (CS 3700 went unchecked)
     expr = parse("CS 2110; CS 3410; or permission of instructor.")
-    assert expr == AnyOf(
-        items=[AllOf(items=codes("CS 2110", "CS 3410")), Flag(text="permission of instructor")]
+    assert expr == AllOf(items=codes("CS 2110", "CS 3410"))
+    # a real alternative after the semicolon stays
+    assert parse("CS 2110; CS 3410; or CS 3420.") == AnyOf(
+        items=[AllOf(items=codes("CS 2110", "CS 3410")), CourseReq(code="CS 3420")]
     )
+
+
+def test_parse_six_and_seven_letter_subjects():
+    assert parse("PUBPOL 2000 or ECON 3030.") == AnyOf(items=codes("PUBPOL 2000", "ECON 3030"))
+    assert parse("TECHIE 5310.") == CourseReq(code="TECHIE 5310")
 
 
 def test_parse_slash_and_bare_numbers():
@@ -282,7 +291,7 @@ def test_audit_separates_open_slots_from_courses(catalog):
     ]
     by_id = {r.id: r for r in audit(plan, program, catalog).requirements}
     assert by_id["ls"].status == "planned"
-    assert by_id["ls"].filled == ["slot1", "ECON 1110"]
+    assert set(by_id["ls"].filled) == {"slot1", "ECON 1110"}
     assert by_id["ls"].open_slots == 1
 
 

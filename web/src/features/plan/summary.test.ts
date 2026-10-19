@@ -3,7 +3,7 @@ import type { AuditResult, RequirementStatus } from '../../api/types'
 import { summarizeRequirements } from './summary'
 
 const req = (id: string, status: RequirementStatus['status'], open_slots = 0): RequirementStatus => ({
-  id, label: id, status, needed: 1, filled: [], open_slots, children: [],
+  id, label: id, status, needed: 1, filled: [], open_slots, children: [], credits: null, credits_needed: null,
 })
 
 describe('summarizeRequirements', () => {

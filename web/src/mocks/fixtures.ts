@@ -117,6 +117,8 @@ export function auditFor(ps: Placement[]): PlanState['audit'] {
       open_slots: Math.max(0, Math.min(filled.length, needed) - Math.min(chosen, needed)),
       status: id === 'aae' ? 'flagged' : done ? 'done' : enough ? 'planned' : 'missing',
       children: [],
+      credits: null,
+      credits_needed: null,
     }
   })
   return {
@@ -157,6 +159,7 @@ export const student: Student = {
   graduation_term: 'SP28',
   max_credits: 18,
   term_caps: {},
+  approvals: [],
   memory_enabled: true,
   onboarded: true,
 }
@@ -191,6 +194,7 @@ export function courseDetail(code: string): Course {
     instructors: [],
     prereq_text: prereqs.join(' and '),
     coreq_text: '',
+    forbidden_overlaps: '',
     prereqs:
       code === 'CS 4820'
         ? CS4820_PREREQS
@@ -275,6 +279,7 @@ export function candidates(slot: string, term: string): SlotCandidates {
     same_subject: false,
     subject: null,
     blocked: [],
+    approval: null,
     candidates: [
       candidate(
         1,

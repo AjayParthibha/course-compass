@@ -7,7 +7,7 @@ audit side with the CP-SAT model; these checks stay as the fast path for drags.
 from collections import defaultdict
 
 from app.catalog.store import Catalog
-from app.planner.ops import term_label
+from app.planner.ops import term_index, term_label
 from app.schemas.courses import AllOf, AnyOf, CourseReq, Flag, PrereqExpr
 from app.schemas.plans import Placement, Violation
 
@@ -48,6 +48,20 @@ def prereq_codes(expr: PrereqExpr | None) -> set[str]:
         case AllOf() | AnyOf():
             return set().union(*(prereq_codes(e) for e in expr.items))
     return set()
+
+
+def credit_clashes(
+    placements: list[Placement], catalog: Catalog
+) -> list[tuple[Placement, Placement]]:
+    """Pairs of different courses in the plan that earn credit once between them, because
+    the roster lists them as forbidden overlaps (MATH 2210 and MATH 2940). The earlier
+    one comes first. The same course twice is a duplicate, reported on its own."""
+    courses = sorted((p for p in placements if p.course), key=lambda p: term_index(p.term))
+    out = []
+    for i, p in enumerate(courses):
+        overlaps = catalog.overlaps(p.course)
+        out += [(p, q) for q in courses[i + 1 :] if q.course in overlaps]
+    return out
 
 
 def prereq_edges(placements: list[Placement], catalog: Catalog) -> list[tuple[str, str]]:
@@ -106,6 +120,16 @@ def validate(
                 )
             )
         seen[key] = p
+
+    for p, q in credit_clashes(placements, catalog):
+        violations.append(
+            Violation(
+                kind="no_credit",
+                message=f"You won't get credit for both {p.course} and {q.course}; "
+                "the roster lists them as overlapping",
+                placement_ids=[p.id, q.id],
+            )
+        )
 
     by_term: dict[str, list[Placement]] = defaultdict(list)
     for p in placements:

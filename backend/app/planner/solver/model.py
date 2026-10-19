@@ -19,7 +19,9 @@ from app.schemas.courses import AllOf, AnyOf, CourseReq, Flag, PrereqExpr
 from app.schemas.requirements import Program, Requirement
 
 Lit = cp_model.IntVar | bool
-RequirementMode = Literal["off", "require", "maximize"]
+# audit: meet as many requirements as possible, then show as much progress as possible
+# on the rest without spreading spare courses around
+RequirementMode = Literal["off", "require", "maximize", "audit"]
 
 
 @dataclass
@@ -27,6 +29,9 @@ class Options:
     fixed: bool = True  # every unit stays in its current term
     requirements: RequirementMode = "off"
     offerings: bool = False  # keep courses out of seasons they've never run in
+    # only requirements: no prerequisites or credit caps (the audit, which has to say
+    # what a broken plan covers too); a repeated course still counts once per rule
+    requirements_only: bool = False
     # units the solver may leave out (open slots, candidates it may add)
     optional: frozenset[str] = frozenset()
     # top-level requirements that must stay met; repair keeps what the plan already meets
@@ -48,10 +53,19 @@ class Result:
     optimal: bool = False
     objective: float | None = None
     values: dict[str, int] = field(default_factory=dict)  # the model's watched variables
+    # units in the plan that earn no credit: a second copy, or a forbidden overlap
+    no_credit: set[str] = field(default_factory=set)
 
     @property
     def feasible(self) -> bool:
         return self.status == "feasible"
+
+
+def _named_only(r: Requirement) -> bool:
+    """A rule made only of named course lists (the core, math), not filters."""
+    if r.kind in ("all_of", "any_of"):
+        return all(_named_only(c) for c in r.children)
+    return r.kind == "courses"
 
 
 class PlanModel:
@@ -83,12 +97,15 @@ class PlanModel:
         self.guards: dict[tuple, cp_model.IntVar] = {}
         # extra variables a caller wants read back from the solution, by name
         self.watch: dict[str, cp_model.IntVar] = {}
+        # requirement id -> group id -> (unit, "counted in this group") pairs
+        self._group_count: dict[str, dict[str, list[tuple[Unit, cp_model.IntVar]]]] = {}
         self._guards: list[cp_model.IntVar] = []
 
         self._place()
-        self._prereqs()
-        self._credits(max_credits, term_caps or {})
-        self._duplicates()
+        if not self.opts.requirements_only:
+            self._prereqs()
+            self._credits(max_credits, term_caps or {})
+            self._duplicates()
         if self.opts.requirements != "off" or self.opts.keep_met is not None:
             self._requirements()
 
@@ -220,27 +237,53 @@ class PlanModel:
 
     # requirements ----------------------------------------------------------------
 
+    def _credit_vars(self):
+        """Whether each unit earns credit. Two copies of a course, or two courses the
+        roster lists as forbidden overlaps ("no credit for both MATH 2210 and MATH
+        2940"), earn it once between them; only a unit earning credit counts anywhere."""
+        clashes = [
+            (u, v)
+            for i, u in enumerate(self.units)
+            for v in self.units[i + 1 :]
+            if u.dup_key and v.dup_key and (u.dup_key == v.dup_key or v.dup_key in u.no_credit_with)
+        ]
+        involved = {w.id for pair in clashes for w in pair}
+        self.earns: dict[str, cp_model.IntVar] = {}
+        for u in self.units:
+            if u.id in involved:
+                e = self.m.NewBoolVar(f"earns[{u.id}]")
+                self.m.AddImplication(e, self.present[u.id])
+                self.earns[u.id] = e
+            else:
+                self.earns[u.id] = self.present[u.id]
+        for u, v in clashes:
+            self.m.Add(self.earns[u.id] + self.earns[v.id] <= 1)
+        self._clashing = [self.earns[i] for i in sorted(involved)]
+
     def _requirements(self):
         reqs = {r.id: r for r in self.program.all_requirements()}
         self._counted: dict[str, list[tuple[Unit, cp_model.IntVar]]] = {}
         self._leaf_sat: list[cp_model.IntVar] = []
+        self._credit_vars()
         for u in self.units:
             for rid in u.eligible:
                 a = self.m.NewBoolVar(f"a[{u.id},{rid}]")
-                self.m.AddImplication(a, self.present[u.id])
+                self.m.AddImplication(a, self.earns[u.id])
                 self.a[(u.id, rid)] = a
                 self._counted.setdefault(rid, []).append((u, a))
             # one requirement per unit, except pairs the rules allow to share
             for i, r1 in enumerate(u.eligible):
                 for r2 in u.eligible[i + 1 :]:
-                    if r2 not in reqs[r1].double_count and r1 not in reqs[r2].double_count:
+                    if not self._may_share(u, reqs[r1], reqs[r2]):
                         self.m.Add(self.a[(u.id, r1)] + self.a[(u.id, r2)] <= 1)
 
         for rid, counted in self._counted.items():
             self._subject_rules(reqs[rid], counted)
+            self._group_rules(reqs[rid], counted)
 
         tops = []
-        for top in (r for s in self.program.sets for r in s.requirements):
+        self._tops = [r for s in self.program.sets for r in s.requirements]
+        for top in self._tops:
             lit = self._req_sat(top)
             tops.append(lit)
             keep = self.opts.keep_met is not None and top.id in self.opts.keep_met
@@ -256,6 +299,75 @@ class PlanModel:
             # won't trade half of an all_of for some other leaf
             weight = len(self._leaf_sat) + 1
             self.m.Maximize(weight * sum(tops) + sum(self._leaf_sat))
+        elif self.opts.requirements == "audit":
+            self._audit_objective(tops, reqs)
+
+    def _audit_objective(self, tops: list[Lit], reqs: dict[str, Requirement]):
+        """Whole rules first, then met leaves, then progress on unmet ones (a course
+        counts as progress only up to what the rule needs), and no spare assignments:
+        a course that isn't needed anywhere stays unassigned."""
+        every = [a for pairs in self._counted.values() for _, a in pairs]
+        progress = []
+        for rid, pairs in self._counted.items():
+            p = self.m.NewIntVar(0, needed(reqs[rid]), f"progress[{rid}]")
+            self.m.Add(p <= sum(a for _, a in pairs))
+            progress.append(p)
+        w_progress = 2
+        w_leaf = w_progress * len(every) + len(every) + 1
+        # between two plans meeting as many rules, prefer the one meeting rules made of
+        # named courses (the core, math): a broad elective can still be filled later
+        named = [lit for lit, top in zip(tops, self._tops, strict=True) if _named_only(top)]
+        w_named = w_leaf * (len(self._leaf_sat) + 1) + w_progress * len(every) + 1
+        w_top = w_named * (len(named) + 1)
+        # last of all, credit for as many units as the overlaps allow, so the reported
+        # credit total is the most the plan can earn
+        w_rules = len(self._clashing) + 1
+        self.m.Maximize(
+            w_rules
+            * (
+                w_top * sum(tops)
+                + w_named * sum(named)
+                + w_leaf * sum(self._leaf_sat)
+                + w_progress * sum(progress)
+                - sum(every)
+            )
+            + sum(self._clashing)
+        )
+
+    def _may_share(self, u: Unit, r1: Requirement, r2: Requirement) -> bool:
+        """Whether one course may count toward both rules: double_count allows the pair,
+        and the course isn't one of the rules' exceptions to it."""
+        if r2.id not in r1.double_count and r1.id not in r2.double_count:
+            return False
+        barred = set(r1.double_count_except.get(r2.id, [])) | set(
+            r2.double_count_except.get(r1.id, [])
+        )
+        return u.course not in barred
+
+    def _group_rules(self, r: Requirement, counted: list[tuple[Unit, cp_model.IntVar]]):
+        """Category rules inside one requirement: each counted course is placed in one of
+        its groups (an open slot in any), groups can be capped, and the rule's
+        satisfaction lit later requires enough distinct groups and per-group credits."""
+        if r.groups:
+            ids = [g.id for g in r.groups]
+            place: dict[str, list[tuple[Unit, cp_model.IntVar]]] = {g: [] for g in ids}
+            for u, a in counted:
+                mine = ids if u.course is None else sorted(u.groups.get(r.id, ()))
+                if not mine:
+                    self.m.Add(a == 0)  # a course outside every group can't count here
+                    continue
+                bs = [self.m.NewBoolVar(f"g[{u.id},{r.id},{g}]") for g in mine]
+                self.m.Add(sum(bs) == a)
+                for g, b in zip(mine, bs, strict=True):
+                    place[g].append((u, b))
+            for g in r.groups:
+                if g.max_courses is not None and len(place[g.id]) > g.max_courses:
+                    self.m.Add(sum(b for _, b in place[g.id]) <= g.max_courses)
+            self._group_count[r.id] = place
+        for level, cap in r.max_below_level.items():
+            below = [a for u, a in counted if u.course is not None and (u.level or 0) < level]
+            if len(below) > cap:
+                self.m.Add(sum(below) <= cap)
 
     def _subject_rules(self, r: Requirement, counted: list[tuple[Unit, cp_model.IntVar]]):
         for subject, cap in r.max_cross_listed.items():
@@ -281,12 +393,35 @@ class PlanModel:
         elif r.kind in ("all_of", "any_of"):
             kids = [self._req_sat(c) for c in r.children]
             lit = self._and(kids) if r.kind == "all_of" else self._or(kids)
+        elif r.kind == "total_credits":
+            here = [u for u in self.units if r.id in u.totals]
+            lit = self.m.NewBoolVar(f"sat[{r.id}]")
+            total = sum(u.credits * self.earns[u.id] for u in here)
+            self.m.Add(total >= (r.credits or 0)).OnlyEnforceIf(lit)
+            self._leaf_sat.append(lit)
         else:
             counted = self._counted.get(r.id, [])
             lit = self.m.NewBoolVar(f"sat[{r.id}]")
             self.m.Add(sum(a for _, a in counted) >= needed(r)).OnlyEnforceIf(lit)
             if r.credits:
                 self.m.Add(sum(u.credits * a for u, a in counted) >= r.credits).OnlyEnforceIf(lit)
+            for level, n in r.min_at_level.items():
+                # an open slot may still become a course at that level
+                up = [a for u, a in counted if u.course is None or (u.level or 0) >= level]
+                self.m.Add(sum(up) >= n).OnlyEnforceIf(lit)
+            place = self._group_count.get(r.id)
+            if place is not None:
+                covered = []
+                for g in r.groups:
+                    cell = place[g.id]
+                    if g.min_credits:
+                        got = sum(u.credits * b for u, b in cell)
+                        self.m.Add(got >= g.min_credits).OnlyEnforceIf(lit)
+                    c = self.m.NewBoolVar(f"covered[{r.id},{g.id}]")
+                    self.m.Add(c <= sum(b for _, b in cell))
+                    covered.append(c)
+                if r.min_groups:
+                    self.m.Add(sum(covered) >= r.min_groups).OnlyEnforceIf(lit)
             self._leaf_sat.append(lit)
         self.sat[r.id] = lit
         return lit
@@ -373,4 +508,9 @@ class PlanModel:
             optimal=code == cp_model.OPTIMAL,
             objective=objective,
             values={name: solver.Value(v) for name, v in self.watch.items()},
+            no_credit={
+                uid
+                for uid, e in getattr(self, "earns", {}).items()
+                if e is not self.present[uid] and solver.Value(self.present[uid]) and not value(e)
+            },
         )

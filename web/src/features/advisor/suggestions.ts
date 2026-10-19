@@ -44,7 +44,8 @@ export function suggestPrompts({ state, selected, asked = [], maxCredits = 18, t
   const problem = violations.find((v) => v.blocking)
   const problemTerm = problem?.placement_ids.map((id) => byId.get(id)?.term).find(Boolean)
   const pick = selected ? byId.get(selected) : undefined
-  const missing = audit.requirements.filter((r) => r.status === 'missing')
+  // a credit total isn't something to "take a course for"
+  const missing = audit.requirements.filter((r) => r.status === 'missing' && r.credits_needed == null)
   const slotTerm = future.find((t) => plan.placements.some((p) => p.term === t && !p.course))
   const heaviest = [...future].sort((a, b) => credits(b) - credits(a))[0]
   const heavy = heaviest && credits(heaviest) >= Math.min(15, (termCaps[heaviest] ?? maxCredits) - 2)

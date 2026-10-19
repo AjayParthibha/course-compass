@@ -68,7 +68,15 @@ def confirm(body: ConfirmRequest, db: DB, student: CurrentStudent) -> PlanState:
         )
 
     program = get_program(student.program, student.catalog_year)
-    placements = seed_slots(placements, terms, current, program, get_catalog())
+    placements = seed_slots(
+        placements,
+        terms,
+        current,
+        program,
+        get_catalog(),
+        max_credits=student.max_credits,
+        term_caps=student.term_caps,
+    )
 
     plan = student.plans[0] if student.plans else models.Plan(student_id=student.id, version=0)
     db.add(plan)
