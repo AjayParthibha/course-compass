@@ -12,6 +12,7 @@ from app.catalog.store import Catalog
 from app.planner.audit import audit, greedy_audit, matches
 from app.planner.initial import seed_slots
 from app.planner.validate import satisfied, validate
+from app.requirements.loader import load_program, load_set
 from app.schemas.courses import AllOf, AnyOf, Course, CourseReq
 from app.schemas.plans import Placement
 from app.schemas.requirements import (
@@ -431,3 +432,31 @@ def test_named_courses_count_on_their_list_before_an_elective():
     assert st["core"].filled == ["CS 3110", "CS 3410"] and st["tech"].filled == []
     out = seed_slots(plan, TERMS, "FA25", program(core, tech), cat)
     assert sorted(p.slot for p in out if not p.course) == ["core", "tech", "tech"]
+
+
+def test_the_ba_takes_either_calculus_and_any_linear_algebra(roster):
+    rules = load_program("cs-as", "2024-25", ROOT / "requirements")
+    for history in (
+        ["MATH 1110", "MATH 1120", "MATH 2210"],
+        ["MATH 1910", "MATH 1920", "MATH 2940"],
+        ["MATH 1110", "MATH 1920", "MATH 2310"],
+    ):
+        plan = [place(c, credits=4) for c in history]
+        assert statuses(plan, rules, roster)["math"].status == "done", history
+    plan = [place(c, credits=4) for c in ("MATH 1110", "MATH 1120")]
+    assert statuses(plan, rules, roster)["math"].status != "done"
+
+
+def test_the_ba_shares_the_engineering_cs_rules_except_math():
+    def leaves(major):
+        rules = load_set(ROOT / "requirements" / major / "2024-25.yaml")
+        return {r.id: r for top in rules.requirements for r in top.walk()}
+
+    eng, ba = leaves("cs-major-eng"), leaves("cs-major-as")
+    for rid in ("core", "e4000", "practicum", "tech", "ext", "aae"):
+        assert ba[rid].model_dump(exclude={"double_count", "notes"}) == eng[rid].model_dump(
+            exclude={"double_count", "notes"}
+        ), rid
+    # nothing in the BA may name a rule that only Engineering has
+    ids = set(ba)
+    assert all(other in ids for r in ba.values() for other in r.double_count)
