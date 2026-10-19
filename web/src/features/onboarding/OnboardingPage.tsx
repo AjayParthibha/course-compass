@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, unwrap } from '../../api/client'
-import { keys, useMe } from '../../api/hooks'
+import { keys, useMe, useSignOut } from '../../api/hooks'
 import type { ParsedCourse, ParseResult } from '../../api/types'
 import { Button, Logo, SectionLabel } from '../../ui'
 import { termLabel } from '../../ui/terms'
@@ -121,6 +121,7 @@ function Row({
 export default function OnboardingPage() {
   const qc = useQueryClient()
   const { data: me } = useMe()
+  const signOut = useSignOut()
   const [start] = useState(() => startingChoices(me, PROGRAMS.map((p) => p.id)))
   const [step, setStep] = useState(0)
   const [program, setProgram] = useState(start.program)
@@ -187,10 +188,15 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="flex items-center gap-3 border-b border-line bg-paper px-5 py-3">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-paper px-5 py-3">
         <Logo />
         <span className="text-[17px] font-extrabold tracking-tight">CourseCompass</span>
-        <span className="text-muted">Setting up your plan · takes about 5 minutes</span>
+        <span className="text-muted max-sm:hidden">Setting up your plan · takes about 5 minutes</span>
+        <span className="flex-1" />
+        {me?.code && <span className="font-mono text-[13px] text-muted">{me.code}</span>}
+        <Button variant="quiet" onClick={signOut}>
+          Sign out
+        </Button>
       </header>
       <main className="mx-auto flex max-w-4xl flex-col gap-6 px-5 py-8">
         <Steps step={step} />

@@ -1,7 +1,5 @@
-import { useQueryClient } from '@tanstack/react-query'
-import { NavLink, Outlet, useMatch, useNavigate } from 'react-router'
-import { auth } from '../api/client'
-import { useMe, usePlan } from '../api/hooks'
+import { NavLink, Outlet, useMatch } from 'react-router'
+import { useMe, usePlan, useSignOut } from '../api/hooks'
 import { Logo } from '.'
 import AccountMenu from './AccountMenu'
 
@@ -32,16 +30,9 @@ function PlanStatus() {
 
 export default function Layout() {
   const { data: me } = useMe()
-  const qc = useQueryClient()
-  const navigate = useNavigate()
+  const signOut = useSignOut()
   // the plan fills the screen below the header on wide screens, so the advisor can run its full height
   const fullHeight = useMatch('/plan') !== null
-
-  const signOut = () => {
-    auth.clear()
-    qc.clear()
-    navigate('/login')
-  }
 
   const link = ({ isActive }: { isActive: boolean }) =>
     `rounded-md px-2.5 py-2 no-underline sm:px-3 ${isActive ? 'bg-chip font-semibold text-ink' : 'text-muted'}`

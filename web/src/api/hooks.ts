@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, unwrap } from './client'
+import { useNavigate } from 'react-router'
+import { api, auth, unwrap } from './client'
 import type { PlanOp, PlanSettingsUpdate, PlanState } from './types'
 
 export const keys = {
@@ -14,6 +15,17 @@ export const keys = {
   // under 'candidates' so whatever refreshes the lists refreshes the areas too
   areas: (slot: string, term: string, placement: string | null) => ['candidates', 'areas', slot, term, placement] as const,
   conversation: ['conversation', 'latest'] as const,
+}
+
+/** Forget this browser's session and cached data, then go to the login page. */
+export function useSignOut() {
+  const qc = useQueryClient()
+  const navigate = useNavigate()
+  return () => {
+    auth.clear()
+    qc.clear()
+    navigate('/login')
+  }
 }
 
 export function useMe(enabled = true) {
