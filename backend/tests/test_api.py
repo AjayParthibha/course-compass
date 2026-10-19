@@ -566,6 +566,7 @@ def test_repair_tool_reports_back(client, auth):
             },
         )
         assert draft.summary.startswith("proposal has")
+        ctx.events.clear()  # the advisor loop empties events after every tool call
         ok = call_tool(ctx, "repair_plan", {"summary": "Check", "request": {}})
         assert ok.data["withdrew_earlier_drafts"] == [draft.data["id"]]
         row = services.get_proposal(db, student, draft.data["id"])

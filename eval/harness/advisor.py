@@ -54,6 +54,7 @@ from app.planner.validate import validate  # noqa: E402
 from app.requirements.loader import load_program  # noqa: E402
 from app.schemas.plans import AddOp, MoveOp, PlanOp, RemoveOp  # noqa: E402
 from harness.scenario import Scenario, load_scenarios  # noqa: E402
+from harness.summary import summarize  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 parse_ops = TypeAdapter(list[PlanOp])
@@ -285,6 +286,7 @@ async def run_one(s: Scenario, mode: str) -> dict:
             "tools": " ".join(tool_calls),
             "input_tokens": sum(r.input_tokens or 0 for r in rows if r.kind == "llm"),
             "output_tokens": sum(r.output_tokens or 0 for r in rows if r.kind == "llm"),
+            "cached_tokens": sum(r.cache_read_tokens or 0 for r in rows if r.kind == "llm"),
             "seconds": round(seconds, 1),
             "says_impossible": await says_it_cant(s.request.text, text)
             if s.expected.outcome == "infeasible"
@@ -335,26 +337,30 @@ async def run_one(s: Scenario, mode: str) -> dict:
         return row
 
 
-async def run_all(modes: list[str], scenarios: list[Scenario], progress: Path) -> list[dict]:
+async def run_all(
+    modes: list[str], scenarios: list[Scenario], progress: Path, repeats: int = 1
+) -> list[dict]:
     """One event loop for the whole run, so the OpenAI client isn't torn down between
-    conversations."""
+    conversations. Repeats go round all modes in turn, so a slow or flaky stretch of the
+    API hits both modes alike."""
     with_repair = prompts.SYSTEM
     repair_tool = tools.REGISTRY["repair_plan"]
     rows = []
-    for mode in modes:
-        if mode == "llm_direct":
-            tools.REGISTRY.pop("repair_plan", None)
-            loop.SYSTEM = prompt_without_repair(with_repair)
-        else:
-            tools.REGISTRY["repair_plan"] = repair_tool
-            loop.SYSTEM = with_repair
-        for s in scenarios:
-            print(f"running {s.id} · {mode}", flush=True)
-            row = await run_one(s, mode)
-            rows.append(row)
-            with progress.open("a") as f:
-                f.write(json.dumps(row) + "\n")
-            print(json.dumps({k: v for k, v in row.items() if k != "reply"}), flush=True)
+    for rep in range(repeats):
+        for mode in modes:
+            if mode == "llm_direct":
+                tools.REGISTRY.pop("repair_plan", None)
+                loop.SYSTEM = prompt_without_repair(with_repair)
+            else:
+                tools.REGISTRY["repair_plan"] = repair_tool
+                loop.SYSTEM = with_repair
+            for s in scenarios:
+                print(f"running {s.id} · {mode} · repeat {rep + 1}/{repeats}", flush=True)
+                row = {"repeat": rep + 1, **await run_one(s, mode)}
+                rows.append(row)
+                with progress.open("a") as f:
+                    f.write(json.dumps(row) + "\n")
+                print(json.dumps({k: v for k, v in row.items() if k != "reply"}), flush=True)
     return rows
 
 
@@ -365,6 +371,7 @@ def main():
     parser.add_argument("--only", help="run scenarios whose id contains this")
     parser.add_argument("--limit", type=int, help="run only the first N scenarios")
     parser.add_argument("--ids", nargs="+", help="run only these scenario ids")
+    parser.add_argument("--repeats", type=int, default=1, help="run everything N times")
     args = parser.parse_args()
     if not os.environ.get("OPENAI_API_KEY"):
         raise SystemExit("set OPENAI_API_KEY")
@@ -379,7 +386,7 @@ def main():
     stamp = f"{datetime.now():%Y%m%d-%H%M%S}"
     # every row is saved as it finishes, so a crash late in a paid run loses nothing
     progress = out_dir / f"{stamp}-advisor.jsonl"
-    rows = asyncio.run(run_all(args.modes, scenarios, progress))
+    rows = asyncio.run(run_all(args.modes, scenarios, progress, args.repeats))
 
     out = out_dir / f"{stamp}-advisor.csv"
     columns = list(dict.fromkeys(k for row in rows for k in row))
@@ -387,9 +394,7 @@ def main():
         writer = csv.DictWriter(f, fieldnames=columns)
         writer.writeheader()
         writer.writerows(rows)
-    for mode in args.modes:
-        mine = [r for r in rows if r["mode"] == mode]
-        print(f"{mode}: {sum(r['correct'] for r in mine)}/{len(mine)} correct")
+    print(summarize(rows))
     print(f"wrote {out.relative_to(ROOT.parent)}")
 
 
