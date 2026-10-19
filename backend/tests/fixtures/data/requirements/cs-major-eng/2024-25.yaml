@@ -10,3 +10,10 @@ requirements:
     kind: filter
     filter: {subjects: [CS], min_level: 4000}
     count: 1
+  - id: ext
+    label: External specialization
+    kind: filter
+    filter: {min_level: 3000, exclude_subjects: [CS]}
+    count: 2
+    same_subject: true
+    approval: Courses from different subjects on one topic, approved by my advisor

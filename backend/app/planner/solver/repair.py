@@ -256,6 +256,8 @@ def _candidates(
             for course in options:
                 if catalog.equivalents(course.code) & (avoid | gone | in_plan):
                     continue
+                if catalog.overlaps(course.code) & in_plan:
+                    continue  # it would earn no credit beside a course that's staying
                 pid = f"new:{course.code}"
                 extra[pid] = Placement(id=pid, term="", course=course.code, credits=course.credits)
                 only_for[pid] = r.id

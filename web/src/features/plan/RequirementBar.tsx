@@ -63,6 +63,8 @@ function ChipList({ id, reqs, label }: { id: string; reqs: RequirementStatus[]; 
         // open slots hold a seat in the plan but no course has been picked yet
         const chosen = covered - r.open_slots
         const flagged = r.status === 'flagged'
+        // a credit total (123 credits) shows credits, not courses
+        const total = r.credits_needed != null
         const active = highlightReq === r.id
         return (
           <li key={r.id} className="flex">
@@ -73,17 +75,23 @@ function ChipList({ id, reqs, label }: { id: string; reqs: RequirementStatus[]; 
               title={
                 flagged
                   ? 'Needs sign-off; not checked automatically'
-                  : r.open_slots
-                    ? `${chosen} chosen, ${r.open_slots} open slot${r.open_slots > 1 ? 's' : ''} still to fill`
-                    : r.status
+                  : total
+                    ? `${r.credits} of ${r.credits_needed} credits, open slots included`
+                    : r.open_slots
+                      ? `${chosen} chosen, ${r.open_slots} open slot${r.open_slots > 1 ? 's' : ''} still to fill`
+                      : r.status
               }
               className={`flex h-8 items-center gap-2 rounded-full border px-3 text-[12.5px] ${active ? 'border-ink bg-ink text-paper' : 'border-line bg-white'}`}
             >
               <span className={`h-2 w-2 rounded-full ${dot[r.status]}`} />
               <span className="font-semibold">{r.label}</span>
               <span className={`font-mono text-[11px] ${active ? 'text-paper' : 'text-muted'}`}>
-                {flagged ? 'check' : `${chosen}/${r.children.length || r.needed}`}
-                {!flagged && r.open_slots > 0 && ` · ${r.open_slots} open`}
+                {flagged
+                  ? 'check'
+                  : total
+                    ? `${r.credits}/${r.credits_needed} cr`
+                    : `${chosen}/${r.children.length || r.needed}`}
+                {!flagged && !total && r.open_slots > 0 && ` · ${r.open_slots} open`}
               </span>
             </button>
           </li>

@@ -104,7 +104,9 @@ def test_only_one_course_cross_listed_with_cs_counts():
         place("ORIE 4741", "SP27"),
         place("ORIE 4742", "FA27"),
     ]
-    assert status(plan).filled == ["ORIE 3300", "ORIE 4741"]
+    counted = status(plan).filled
+    # only one of the two CS cross-listings counts; either is a valid choice
+    assert "ORIE 3300" in counted and len({"ORIE 4741", "ORIE 4742"} & set(counted)) == 1
     assert not check_plan(plan, TERMS, "FA26", CATALOG, PROGRAM, requirements="require").feasible
     plan[2] = place("ORIE 4580", "FA27")
     assert status(plan).status == "planned"
@@ -148,3 +150,21 @@ def test_areas_split_ready_from_blocked_with_reasons():
 def test_listed_under_prefers_the_subjects_own_code():
     assert listed_under(CATALOG.get("CEE 4520"), "ORIE", CATALOG).code == "ORIE 4520"
     assert listed_under(CATALOG.get("ORIE 3300"), "ORIE", CATALOG).code == "ORIE 3300"
+
+
+def test_an_advisor_approved_mix_counts():
+    approvable = PROGRAM.model_copy(deep=True)
+    approvable.sets[0].requirements[0].approval = "Courses on one topic, approved by my advisor"
+    mix = [
+        place("ORIE 3300", "FA25", "completed"),
+        place("ECON 3030", "SP27"),
+        place("ECON 3110", "FA27"),
+    ]
+    approved = approvable.with_approvals(["ext"])
+    assert audit(mix, approved, CATALOG).requirements[0].status == "planned"
+    assert check_plan(mix, TERMS, "FA26", CATALOG, approved, requirements="require").feasible
+    # without the approval it's still one subject, and the rule itself is unchanged
+    assert audit(mix, approvable.with_approvals([]), CATALOG).requirements[0].status == "missing"
+    assert approvable.sets[0].requirements[0].same_subject
+    # a rule that allows no approval ignores one
+    assert PROGRAM.with_approvals(["ext"]) is PROGRAM

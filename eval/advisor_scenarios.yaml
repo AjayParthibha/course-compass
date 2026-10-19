@@ -9,13 +9,13 @@
   entering: FA24
   graduating: SP28
   current: FA26
-  # a typical Engineering CS history: both writing seminars, ENGRI and some liberal
-  # studies done, so onboarding seeds the usual open slots and terms start near 15 credits
+  # a typical Engineering CS history: both writing seminars, ENGRI, the PHYS 1110 lab, a
+  # fourth science (PHYS 2214) and some liberal studies done, about 16 credits a term
   history: &history
     FA24: [CS 1110, MATH 1910, CHEM 2090, ENGL 1105]
-    SP25: [CS 2110, MATH 1920, PHYS 1112, ENGL 1111, ENGRI 1101]
+    SP25: [CS 2110, MATH 1920, PHYS 1112, PHYS 1110, ENGL 1111, ENGRI 1101]
     FA25: [CS 2800, MATH 2940, PHYS 2213, ECON 1110]
-    SP26: [CS 3110, ENGRD 2700, PSYCH 1101, PHIL 1100]
+    SP26: [CS 3110, ENGRD 2700, PHYS 2214, PSYCH 1101, PHIL 1100]
     FA26: [CS 3780, CS 4820, ORIE 3300, GOVT 1111]
   plan:
     SP27: [CS 3410, CS 4740, CS 4780]
@@ -25,7 +25,11 @@
     text: Can you make Spring '27 12 credits at most?
     constraints: {term_caps: {SP27: 12}}
   expected:
-    outcome: feasible
+    outcome: infeasible
+    notes: >-
+      Was possible under the earlier, incomplete rules. With the PHYS 1110 lab, the fourth
+      science, the liberal studies groups and the 123-credit total counted (rules checked
+      2026-10-19), the remaining terms are full of required seats. The solver offers Spring ’27 at 15 credits.
 
 - id: adv-2-drop-prereq
   program: cs-eng
@@ -148,7 +152,11 @@
     text: Keep both Fall '27 and Spring '28 at 14 credits or less.
     constraints: {term_caps: {FA27: 14, SP28: 14}}
   expected:
-    outcome: feasible
+    outcome: infeasible
+    notes: >-
+      Was possible under the earlier, incomplete rules. With the PHYS 1110 lab, the fourth
+      science, the liberal studies groups and the 123-credit total counted (rules checked
+      2026-10-19), the remaining terms are full of required seats.
 
 - id: adv-9-fix-prereqs
   split: heldout
@@ -184,7 +192,11 @@
     text: Keep CS 4740 in Spring '27, but make that semester 12 credits max.
     constraints: {keep: [cs4740], term_caps: {SP27: 12}}
   expected:
-    outcome: feasible
+    outcome: infeasible
+    notes: >-
+      Was possible under the earlier, incomplete rules. With the PHYS 1110 lab, the fourth
+      science, the liberal studies groups and the 123-credit total counted (rules checked
+      2026-10-19), the remaining terms are full of required seats. The solver offers Spring ’27 at 14 credits.
 
 - id: adv-11-study-abroad
   split: heldout

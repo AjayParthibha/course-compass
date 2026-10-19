@@ -1,0 +1,27 @@
+INFO 4300:
+  coreq_text: null
+  note: cross-listed with CS 4300; same text
+  parsed:
+    items:
+    - items:
+      - items:
+        - code: MATH 2940
+          concurrent: false
+          kind: course
+        - code: CS 2800
+          concurrent: false
+          kind: course
+        kind: all
+      - code: INFO 2950
+        concurrent: false
+        kind: course
+      kind: any
+    - code: CS 2110
+      concurrent: false
+      kind: course
+    kind: all
+  reviewed: true
+  text: '1) Linear algebra: strong performance in MATH 2940 or equivalent; 2) Discrete math: strong performance
+    in CS 2800 or equivalent. Note: The linear algebra and discrete math requirements can also be fulfilled
+    with a strong performance in INFO 2950; and 3) Programming proficiency: CS 2110 or equivalent with
+    strong Python skills and familiarity with IPython Notebooks, or permission of instructor.'

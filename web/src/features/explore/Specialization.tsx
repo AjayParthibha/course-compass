@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { useAreas, useCandidates } from '../../api/hooks'
-import type { Area, Candidate, PlanState, SlotAreas } from '../../api/types'
+import { useAreas, useCandidates, useSetApproval } from '../../api/hooks'
+import type { Area, Candidate, PlanState, SlotAreas, SlotCandidates } from '../../api/types'
 import { Button } from '../../ui'
 import { cureviewsUrl } from '../../ui/links'
 import { termLabel } from '../../ui/terms'
@@ -66,10 +66,35 @@ export default function Specialization({ slotId, term, placementId, state, ...re
 function Rule({ areas }: { areas: SlotAreas }) {
   const caps = Object.entries(areas.caps)
   return (
-    <p className="m-0 max-w-3xl text-muted">
-      {areas.needed} courses from one subject
-      {caps.map(([s, n]) => `, at most ${n} cross-listed with ${s}`).join('')}. Pick the area first, then the
-      courses. A mix of subjects can count with your advisor’s approval.
+    <div className="flex max-w-3xl flex-col gap-1">
+      <p className="m-0 text-muted">
+        {areas.needed} courses from one subject
+        {caps.map(([s, n]) => `, at most ${n} cross-listed with ${s}`).join('')}. Pick the area first, then the
+        courses.
+      </p>
+      {areas.approval && <Approval slotId={areas.slot_id} approval={areas.approval} />}
+    </div>
+  )
+}
+
+/**
+ * The catalog lets an advisor approve a mix of subjects on one topic. Saying so drops the
+ * one-subject rule for this student, so the slot lists every course that fits instead of areas.
+ */
+export function Approval({ slotId, approval }: { slotId: string; approval: NonNullable<SlotCandidates['approval']> }) {
+  const set = useSetApproval()
+  const toggle = () => set.mutate({ requirement: slotId, approved: !approval.approved })
+  return (
+    <p role="status" className="m-0 flex flex-wrap items-baseline gap-x-2 text-[13.5px] text-muted">
+      {approval.approved ? (
+        <span title={approval.label}>Your advisor approved a mix of subjects on one topic, so courses from any subject can count here.</span>
+      ) : (
+        <span>A mix of subjects on one topic can count with your advisor’s approval.</span>
+      )}
+      <Button variant="link" disabled={set.isPending} onClick={toggle}>
+        {approval.approved ? 'Back to one subject' : 'My advisor approved a mix'}
+      </Button>
+      {set.error && <span className="text-accent">{set.error.message}</span>}
     </p>
   )
 }

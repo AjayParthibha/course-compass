@@ -1,8 +1,10 @@
-# Checked on 2026-10-15 against the 2026-27 Courses of Study (the 2024-25 edition
-# wouldn't load): https://catalog.cornell.edu/programs/computer-science-bs/
-# Nothing found differs for Fall 2024 entrants except possibly the practicum list
-# (CoursePlan's 2024 data also listed CS 4154 and CS 5431). Rules the model can't
-# check yet are in `notes`.
+# Sources, checked 2026-10-19:
+#  - the CS department's "CS CHECKLIST (ENGINEERING) for students matriculated in Fall
+#    2024 or later" (Dec 2024 draft, marked subject to change), and
+#  - the 2026-27 Courses of Study, Computer Science (BS), Curriculum tab:
+#    https://catalog.cornell.edu/programs/computer-science-bs/
+# Where they differ, both are accepted (the practicum list) or the stricter one is used
+# (ROTC for the major-approved elective). Rules the model can't check are in `notes`.
 id: cs-major-eng
 label: CS major (Engineering)
 catalog_year: 2024-25
@@ -51,30 +53,48 @@ requirements:
       min_level: 4000
       min_credits: 3
       exclude: [CS 4090, CS 4997, CS 4998, CS 4999]
+      # "CS 3700 or CS 3780 allowed if not used towards a CS core requirement": a course
+      # counts toward one requirement only, so the core keeps the one it uses
+      include: [CS 3700, CS 3780]
     count: 2
-    double_count: [practicum]
     notes: >-
-      CS 3700 or CS 3780 also counts when it isn't used for the core (not modelled yet).
-      Whether a practicum course may also count here isn't stated in the catalog; kept as before.
+      Two non-core CS 4000+ courses of 3+ credits. A practicum course can't also count here
+      (the checklist's "no double counting" rule).
 
   - id: practicum
     label: Practicum or project
     kind: courses
-    courses: [CS 3152, CS 4121, CS 4152, CS 4321, CS 4411, CS 4621, CS 4701, CS 4740, CS 5121, CS 5150, CS 5152, CS 5321, CS 5411, CS 5412, CS 5414, CS 5621, CS 5625, CS 5643, CS 5740]
+    # the Fall 2024 checklist ("CS 4xx1" practicums, 3152, 4152, 4154, 4740, 4752, 5150,
+    # 5152, 5412, 5414, 5431, 5625, 5643) plus the 2026-27 catalog's list (adds the 5xxx
+    # versions 5121, 5321, 5411, 5621 and 5740); CS 4xx1 = 4121, 4321, 4411, 4621, 4701
+    courses: [CS 3152, CS 4121, CS 4152, CS 4154, CS 4321, CS 4411, CS 4621, CS 4701, CS 4740, CS 4752, CS 5121, CS 5150, CS 5152, CS 5321, CS 5411, CS 5412, CS 5414, CS 5431, CS 5621, CS 5625, CS 5643, CS 5740]
     count: 1
-    double_count: [e4000]
 
   - id: tech
     label: Technical electives
     kind: filter
     filter:
-      min_level: 3000
+      # 3000+ courses of 3+ credits, but one 2000+ course is allowed (max_below_level)
+      min_level: 2000
       min_credits: 3
       exclude: [CS 4090, CS 4997, CS 4998]
+      qualifying_prereq:
+        # "Any CS course of 3 or more credits, and at or above the 3000-level"
+        exempt_subjects: [CS]
+        # the catalog's qualifying corequisites or prerequisites, by course
+        courses: [AEM 2100, AEM 2240, AEM 2241, BEE 2510, BEE 2600, BIOEE 1610, BIOEE 1780, BIOG 1445, BIOMG 2800, BIOMG 3300, BIOMG 3310, BIOMG 3320, BIOMG 3350, BIONB 2220, CEE 3040, CHEM 1560, CHEM 1570, CHEM 2070, CHEM 2090, CHEM 2150, CS 2110, CS 2112, CS 2800, CS 2802, ECON 3030, ECON 3040, ECON 3110, ECON 3120, ECON 3130, INFO 2300, INFO 2950, INFO 3300, LING 3302, LING 3303, MATH 1120, MATH 1910, MATH 1920, MATH 2210, MATH 2220, MATH 2240, MATH 2930, MATH 2940, ORIE 3300, ORIE 3500, PHIL 2310, PHYS 1112, PHYS 1116, PHYS 2207, PHYS 2208, PHYS 2213, PHYS 2214, PHYS 2217, PHYS 2218, PUBPOL 2100, PUBPOL 2101, STSCI 2100, STSCI 2200, STSCI 3080]
+        subjects: [ENGRD]  # "or any ENGRD course"
+        # "by course text": college-level biology, second-semester calculus, probability or
+        # statistics named as a corequisite or prerequisite
+        text_any: [college-level biology, second-semester calculus, probability, statistics]
+        chain: true  # a requisite that itself has a qualifying requisite
     count: 3
+    max_below_level: {3000: 1}
     notes: >-
-      Each course needs a qualifying prerequisite or corequisite listed in the catalog
-      (not checked yet). One 2000+ course and up to two research courses may count.
+      Up to two research courses may count (letter grade, 3+ credits; CS 4999 qualifies;
+      other departments' research needs faculty confirmation): not modelled. Recommended
+      prerequisites, and ones only on a syllabus, don't qualify; the text check reads the
+      roster's prerequisite wording up to the word "recommended".
 
   - id: ext
     label: External specialization
@@ -106,19 +126,35 @@ requirements:
         - Teaching Experience
         - Supervised Teaching
         - Internship
+      # named on the Fall 2024 checklist as not accepted
+      exclude: [LING 4474, INFO 3300, INFO 4300, INFO 5300]
     count: 3
     same_subject: true
+    # the catalog accepts an advisor-approved topic in place of one shared prefix
+    approval: Three courses from different subjects on one topic, approved by my advisor
     max_cross_listed: {CS: 1}
     notes: >-
       The three courses must share a prefix or an advisor-approved topic; at most one may be
-      cross-listed with CS; no research, independent study, project team, PE or teaching credit.
+      cross-listed with CS (catalog; the 2024 checklist also bars courses "parented by CS",
+      which the course data can't tell apart); no research, independent study, project team,
+      PE or teaching credit; LING 4474, INFO 3300, INFO 4300 and INFO 5300 don't count.
 
   # id kept for existing plans; this is the major's elective, not the college's
   - id: aae
     label: Major-approved elective
     kind: filter
-    filter: {min_level: 1100, exclude_subjects: [PE]}
+    # checklist: no PE, no courses numbered 10xx (which covers Engineering AEWs), no ROTC
+    # courses unless cross-listed with an academic department
+    filter: {min_level: 1100, exclude_subjects: [PE, AIRS, MILS, NAVS]}
     count: 1
     credits: 3
     double_count: [eng-comm]
     notes: One course of 3+ credits or several totalling 3; S/U allowed; no AP/IB credit.
+
+  # catalog: "Minimum Credits for Degree: 123"; PE, ROTC under the 3000 level and courses
+  # under the 1100 level don't count toward the CS degree requirements
+  - id: total-credits
+    label: 123 credits
+    kind: total_credits
+    filter: {min_level: 1100, exclude_subjects: [PE], min_level_for: {AIRS: 3000, MILS: 3000, NAVS: 3000}}
+    credits: 123

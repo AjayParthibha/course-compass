@@ -58,6 +58,8 @@ class Course(Schema):
     instructors: list[str] = []
     prereq_text: str = ""
     coreq_text: str = ""
+    # the roster's "no credit for both" list, as written; see app/catalog/overlaps.py
+    forbidden_overlaps: str = ""
     prereqs: PrereqExpr | None = None
     prereqs_reviewed: bool = False
 
@@ -67,8 +69,10 @@ class Course(Schema):
 
     @property
     def level(self) -> int:
+        """The course number as a number (CS 1110 -> 1110), so level rules compare the
+        way the catalog states them: "courses under the 1100-level", "3000+"."""
         digits = "".join(ch for ch in self.number if ch.isdigit())
-        return int(digits[0]) * 1000 if digits else 0
+        return int(digits[:4].ljust(4, "0")) if digits else 0
 
     def summary(self) -> CourseSummary:
         return CourseSummary(code=self.code, title=self.title, credits=self.credits)

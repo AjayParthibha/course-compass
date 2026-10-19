@@ -26,7 +26,7 @@ MATH 1021:
   coreq_text: null
   parsed:
     code: MATH 2210
-    concurrent: false
+    concurrent: true
     kind: course
   reviewed: false
   text: 'Corequisite: MATH 2210.'
@@ -66,24 +66,20 @@ MATH 2130:
     - code: MATH 1910
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: 'Prerequisite: MATH 1120, MATH 1910, or equivalent AP credit.'
 MATH 2210:
   coreq_text: null
   parsed:
     items:
-    - items:
-      - code: MATH 1110
-        concurrent: false
-        kind: course
-      - code: MATH 1120
-        concurrent: false
-        kind: course
-      kind: all
-    - kind: flag
-      text: permission of department
-    kind: any
+    - code: MATH 1110
+      concurrent: false
+      kind: course
+    - code: MATH 1120
+      concurrent: false
+      kind: course
+    kind: all
   reviewed: false
   text: MATH 1110 and MATH 1120; or permission of department.
 MATH 2220:
@@ -98,17 +94,13 @@ MATH 2230:
   coreq_text: null
   parsed:
     items:
-    - items:
-      - code: MATH 1110
-        concurrent: false
-        kind: course
-      - code: MATH 1120
-        concurrent: false
-        kind: course
-      kind: all
-    - kind: flag
-      text: permission of instructor
-    kind: any
+    - code: MATH 1110
+      concurrent: false
+      kind: course
+    - code: MATH 1120
+      concurrent: false
+      kind: course
+    kind: all
   reviewed: false
   text: minimum grade of A- in MATH 1110 and MATH 1120; or permission of instructor.
 MATH 2240:
@@ -145,7 +137,7 @@ MATH 2810:
     - code: MATH 2230
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: "Prerequisite: PHIL 2310, or MATH 2210, or MATH 2230\_or permission of instructor."
 MATH 2930:
@@ -212,7 +204,7 @@ MATH 3110:
         concurrent: false
         kind: course
       kind: any
-    kind: any
+    kind: all
   reviewed: false
   text: MATH 2210 or MATH 2230 or MATH 2310 or MATH 2940; MATH 2220 or MATH 2240 or MATH 1920; or equivalents.
 MATH 3210:
@@ -244,7 +236,7 @@ MATH 3210:
         concurrent: false
         kind: course
       kind: any
-    kind: any
+    kind: all
   reviewed: false
   text: MATH 2210 or MATH 2230 or MATH 2310 or MATH 2940; MATH 2220 or MATH 2240 or MATH 1920; or equivalents.
 MATH 3230:
@@ -258,7 +250,7 @@ MATH 3230:
       - code: MATH 2220
         concurrent: false
         kind: course
-      kind: any
+      kind: all
     - items:
       - code: MATH 2230
         concurrent: false
@@ -266,14 +258,16 @@ MATH 3230:
       - code: MATH 2240
         concurrent: false
         kind: course
-      kind: any
-    - code: MATH 1920
-      concurrent: false
-      kind: course
-    - code: MATH 2940
-      concurrent: false
-      kind: course
-    kind: all
+      kind: all
+    - items:
+      - code: MATH 1920
+        concurrent: false
+        kind: course
+      - code: MATH 2940
+        concurrent: false
+        kind: course
+      kind: all
+    kind: any
   reviewed: false
   text: "Prerequisite: multivariable calculus and linear algebra (e.g., MATH 2210-MATH 2220, MATH 2230-MATH\
     \ 2240, or MATH 1920\_and MATH 2940), or permission of instructor."
@@ -306,7 +300,7 @@ MATH 3270:
         concurrent: false
         kind: course
       kind: any
-    kind: any
+    kind: all
   reviewed: false
   text: MATH 2210 or MATH 2230 or MATH 2310 or MATH 2940; MATH 2220 or MATH 2240 or MATH 1920; or equivalents.
 MATH 3320:
@@ -344,7 +338,7 @@ MATH 3340:
     - code: MATH 2940
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: MATH 2210, MATH 2230, MATH 2310, MATH 2940, or equivalent.
 MATH 3360:
@@ -363,7 +357,7 @@ MATH 3360:
     - code: MATH 2940
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: MATH 2210, MATH 2230, MATH 2310, MATH 2940, or equivalent.
 MATH 3610:
@@ -445,7 +439,7 @@ MATH 4040:
         concurrent: false
         kind: course
       kind: any
-    kind: any
+    kind: all
   reviewed: false
   text: MATH 2210 or MATH 2230 or MATH 2310 or MATH 2940; MATH 2220 or MATH 2240 or MATH 1920; or equivalents.
 MATH 4130:
@@ -477,7 +471,7 @@ MATH 4130:
         concurrent: false
         kind: course
       kind: any
-    kind: any
+    kind: all
   reviewed: false
   text: minimum grade of A- in MATH 2210 or MATH 2230 or MATH 2310 or MATH 2940; minimum grade of A- in  MATH
     2220 or MATH 2240 or MATH 1920; or equivalents.
@@ -500,41 +494,45 @@ MATH 4180:
       - code: MATH 2240
         concurrent: false
         kind: course
-      kind: any
+      kind: all
     - code: MATH 3110
       concurrent: false
       kind: course
     - code: MATH 4130
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: MATH 2230-MATH 2240, MATH 3110, or MATH 4130, or permission of instructor.
 MATH 4200:
   coreq_text: null
   parsed:
     items:
-    - code: MATH 2210
-      concurrent: false
-      kind: course
-    - code: MATH 2230
-      concurrent: false
-      kind: course
-    - code: MATH 2310
-      concurrent: false
-      kind: course
-    - code: MATH 2940
-      concurrent: false
-      kind: course
-    - code: MATH 2220
-      concurrent: false
-      kind: course
-    - code: MATH 2240
-      concurrent: false
-      kind: course
-    - code: MATH 1920
-      concurrent: false
-      kind: course
+    - items:
+      - code: MATH 2210
+        concurrent: false
+        kind: course
+      - code: MATH 2230
+        concurrent: false
+        kind: course
+      - code: MATH 2310
+        concurrent: false
+        kind: course
+      - code: MATH 2940
+        concurrent: false
+        kind: course
+      kind: any
+    - items:
+      - code: MATH 2220
+        concurrent: false
+        kind: course
+      - code: MATH 2240
+        concurrent: false
+        kind: course
+      - code: MATH 1920
+        concurrent: false
+        kind: course
+      kind: any
     kind: all
   reviewed: false
   text: a semester of linear algebra (MATH 2210, MATH 2230, MATH 2310, or MATH 2940) and a semester of
@@ -568,31 +566,29 @@ MATH 4210:
         concurrent: false
         kind: course
       kind: any
-    kind: any
+    kind: all
   reviewed: false
   text: MATH 2210 or MATH 2230 or MATH 2310 or MATH 2940; MATH 2220 or MATH 2240 or MATH 1920; or equivalents.
 MATH 4220:
   coreq_text: null
+  note: one linear algebra course, as in MATH 4210 and MATH 3110; read literally the text needs two, which
+    the roster's forbidden overlap gives credit for only once
   parsed:
     items:
     - items:
-      - items:
-        - code: MATH 2210
-          concurrent: false
-          kind: course
-        - code: MATH 2230
-          concurrent: false
-          kind: course
-        kind: any
-      - items:
-        - code: MATH 2310
-          concurrent: false
-          kind: course
-        - code: MATH 2940
-          concurrent: false
-          kind: course
-        kind: any
-      kind: all
+      - code: MATH 2210
+        concurrent: false
+        kind: course
+      - code: MATH 2230
+        concurrent: false
+        kind: course
+      - code: MATH 2310
+        concurrent: false
+        kind: course
+      - code: MATH 2940
+        concurrent: false
+        kind: course
+      kind: any
     - items:
       - code: MATH 2220
         concurrent: false
@@ -604,30 +600,37 @@ MATH 4220:
         concurrent: false
         kind: course
       kind: any
-    kind: any
-  reviewed: false
+    kind: all
+  reviewed: true
   text: MATH 2210 or MATH 2230, MATH 2310 or MATH 2940; MATH 2220 or MATH 2240 or MATH 1920; or equivalents.
 MATH 4250:
   coreq_text: null
+  note: cross-listed with CS 4210; the 3000-level course can't be checked automatically
   parsed:
     items:
-    - code: MATH 2210
-      concurrent: false
-      kind: course
-    - code: MATH 2230
-      concurrent: false
-      kind: course
-    - code: MATH 2240
-      concurrent: false
-      kind: course
-    - code: MATH 2310
-      concurrent: false
-      kind: course
-    - code: MATH 2940
-      concurrent: false
-      kind: course
-    kind: any
-  reviewed: false
+    - items:
+      - code: MATH 2210
+        concurrent: false
+        kind: course
+      - items:
+        - code: MATH 2230
+          concurrent: false
+          kind: course
+        - code: MATH 2240
+          concurrent: false
+          kind: course
+        kind: all
+      - code: MATH 2310
+        concurrent: false
+        kind: course
+      - code: MATH 2940
+        concurrent: false
+        kind: course
+      kind: any
+    - kind: flag
+      text: a 3000 level or above MATH course
+    kind: all
+  reviewed: true
   text: MATH 2210 or MATH 2230-MATH 2240 or MATH 2310 or MATH 2940 or equivalent; a 3000 level or above
     MATH course.
 MATH 4260:
@@ -653,7 +656,7 @@ MATH 4280:
     - code: MATH 3270
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: MATH 2930, MATH 3270, or equivalent.
 MATH 4310:
@@ -691,7 +694,7 @@ MATH 4315:
     - code: MATH 2940
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: 'Prerequisite: MATH 2210, MATH 2230, MATH 2310, or MATH 2940. Students will be expected to be
     comfortable with proofs.'
@@ -776,34 +779,38 @@ MATH 4420:
     - code: MATH 2940
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: MATH 2210, MATH 2230, MATH 2310, MATH 2940, or equivalent.
 MATH 4500:
   coreq_text: null
   parsed:
     items:
-    - code: MATH 2210
-      concurrent: false
-      kind: course
-    - code: MATH 2230
-      concurrent: false
-      kind: course
-    - code: MATH 2310
-      concurrent: false
-      kind: course
-    - code: MATH 2940
-      concurrent: false
-      kind: course
-    - code: MATH 2220
-      concurrent: false
-      kind: course
-    - code: MATH 2240
-      concurrent: false
-      kind: course
-    - code: MATH 1920
-      concurrent: false
-      kind: course
+    - items:
+      - code: MATH 2210
+        concurrent: false
+        kind: course
+      - code: MATH 2230
+        concurrent: false
+        kind: course
+      - code: MATH 2310
+        concurrent: false
+        kind: course
+      - code: MATH 2940
+        concurrent: false
+        kind: course
+      kind: any
+    - items:
+      - code: MATH 2220
+        concurrent: false
+        kind: course
+      - code: MATH 2240
+        concurrent: false
+        kind: course
+      - code: MATH 1920
+        concurrent: false
+        kind: course
+      kind: any
     kind: all
   reviewed: false
   text: a semester of linear algebra (MATH 2210, MATH 2230, MATH 2310, or MATH 2940) and a semester of
@@ -824,7 +831,7 @@ MATH 4520:
     - code: MATH 2940
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: MATH 2210, MATH 2230, MATH 2310, MATH 2940, or equivalent.
 MATH 4530:
@@ -850,27 +857,31 @@ MATH 4540:
   coreq_text: null
   parsed:
     items:
-    - code: MATH 2210
-      concurrent: false
-      kind: course
-    - code: MATH 2230
-      concurrent: false
-      kind: course
-    - code: MATH 2310
-      concurrent: false
-      kind: course
-    - code: MATH 2940
-      concurrent: false
-      kind: course
-    - code: MATH 2220
-      concurrent: false
-      kind: course
-    - code: MATH 2240
-      concurrent: false
-      kind: course
-    - code: MATH 1920
-      concurrent: false
-      kind: course
+    - items:
+      - code: MATH 2210
+        concurrent: false
+        kind: course
+      - code: MATH 2230
+        concurrent: false
+        kind: course
+      - code: MATH 2310
+        concurrent: false
+        kind: course
+      - code: MATH 2940
+        concurrent: false
+        kind: course
+      kind: any
+    - items:
+      - code: MATH 2220
+        concurrent: false
+        kind: course
+      - code: MATH 2240
+        concurrent: false
+        kind: course
+      - code: MATH 1920
+        concurrent: false
+        kind: course
+      kind: any
     kind: all
   reviewed: false
   text: a semester of linear algebra (MATH 2210, MATH 2230, MATH 2310, or MATH 2940) and a semester of
@@ -891,7 +902,7 @@ MATH 4560:
     - code: MATH 4500
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: 'Prerequisite: an introduction to groups via MATH 3340, MATH 3360, MATH 4340, or MATH 4500, or
     permission of instructor. Students will be expected to be comfortable with proofs.'
@@ -930,10 +941,10 @@ MATH 4740:
   coreq_text: null
   parsed:
     items:
-    - code: MATH 4710
-      concurrent: false
-      kind: course
     - items:
+      - code: MATH 4710
+        concurrent: false
+        kind: course
       - code: BTRY 3080
         concurrent: false
         kind: course
@@ -943,25 +954,27 @@ MATH 4740:
       - code: STSCI 3080
         concurrent: false
         kind: course
+      - code: ORIE 3500
+        concurrent: false
+        kind: course
+      - code: ECON 3130
+        concurrent: false
+        kind: course
       kind: any
-    - code: ORIE 3500
-      concurrent: false
-      kind: course
-    - code: ECON 3130
-      concurrent: false
-      kind: course
-    - code: MATH 2210
-      concurrent: false
-      kind: course
-    - code: MATH 2230
-      concurrent: false
-      kind: course
-    - code: MATH 2310
-      concurrent: false
-      kind: course
-    - code: MATH 2940
-      concurrent: false
-      kind: course
+    - items:
+      - code: MATH 2210
+        concurrent: false
+        kind: course
+      - code: MATH 2230
+        concurrent: false
+        kind: course
+      - code: MATH 2310
+        concurrent: false
+        kind: course
+      - code: MATH 2940
+        concurrent: false
+        kind: course
+      kind: any
     kind: all
   reviewed: false
   text: MATH 4710, BTRY 3080/ILRST 3080/STSCI 3080, ORIE 3500, or ECON 3130 and linear algebra (MATH 2210,
@@ -1028,34 +1041,38 @@ MATH 4860:
     - code: MATH 2940
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: MATH 2210, MATH 2230, MATH 2310, MATH 2940, or equivalent.
 MATH 5200:
   coreq_text: null
   parsed:
     items:
-    - code: MATH 2210
-      concurrent: false
-      kind: course
-    - code: MATH 2230
-      concurrent: false
-      kind: course
-    - code: MATH 2310
-      concurrent: false
-      kind: course
-    - code: MATH 2940
-      concurrent: false
-      kind: course
-    - code: MATH 2220
-      concurrent: false
-      kind: course
-    - code: MATH 2240
-      concurrent: false
-      kind: course
-    - code: MATH 1920
-      concurrent: false
-      kind: course
+    - items:
+      - code: MATH 2210
+        concurrent: false
+        kind: course
+      - code: MATH 2230
+        concurrent: false
+        kind: course
+      - code: MATH 2310
+        concurrent: false
+        kind: course
+      - code: MATH 2940
+        concurrent: false
+        kind: course
+      kind: any
+    - items:
+      - code: MATH 2220
+        concurrent: false
+        kind: course
+      - code: MATH 2240
+        concurrent: false
+        kind: course
+      - code: MATH 1920
+        concurrent: false
+        kind: course
+      kind: any
     kind: all
   reviewed: false
   text: a semester of linear algebra (MATH 2210, MATH 2230, MATH 2310, or MATH 2940) and a semester of
@@ -1103,12 +1120,14 @@ MATH 5250:
     - code: MATH 2310
       concurrent: false
       kind: course
-    - code: MATH 2230
-      concurrent: false
-      kind: course
-    - code: MATH 2240
-      concurrent: false
-      kind: course
+    - items:
+      - code: MATH 2230
+        concurrent: false
+        kind: course
+      - code: MATH 2240
+        concurrent: false
+        kind: course
+      kind: all
     kind: any
   reviewed: false
   text: 'background equivalent to: MATH 2210 or MATH 2310 or MATH 2230-MATH 2240.'
@@ -1147,7 +1166,7 @@ MATH 5420:
     - code: MATH 2940
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: MATH 2210, MATH 2230, MATH 2310, MATH 2940, or equivalent.
 MATH 6110:
@@ -1190,7 +1209,7 @@ MATH 6160:
     - code: MATH 6210
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: MATH 6110, MATH 6210, or the equivalent.
 MATH 6210:
@@ -1230,7 +1249,7 @@ MATH 6260:
     - code: MATH 4140
       concurrent: false
       kind: course
-    kind: any
+    kind: all
   reviewed: false
   text: MATH 4130-MATH 4140 or equivalent.
 MATH 6270:
@@ -1243,7 +1262,7 @@ MATH 6270:
     - code: MATH 6260
       concurrent: false
       kind: course
-    kind: all
+    kind: any
   reviewed: false
   text: 'Prerequisite: MAE 6750, MATH 6260, or equivalent.'
 MATH 6302:
@@ -1274,17 +1293,13 @@ MATH 6330:
   coreq_text: null
   parsed:
     items:
-    - items:
-      - code: MATH 6310
-        concurrent: false
-        kind: course
-      - code: MATH 6320
-        concurrent: false
-        kind: course
-      kind: all
-    - kind: flag
-      text: permission of instructor
-    kind: any
+    - code: MATH 6310
+      concurrent: false
+      kind: course
+    - code: MATH 6320
+      concurrent: false
+      kind: course
+    kind: all
   reviewed: false
   text: MATH 6310 and MATH 6320; or permission of instructor.
 MATH 6340:
@@ -1361,14 +1376,12 @@ MATH 6520:
   coreq_text: null
   parsed:
     items:
-    - items:
-      - code: MATH 4130
-        concurrent: false
-        kind: course
-      - code: MATH 4140
-        concurrent: false
-        kind: course
-      kind: all
+    - code: MATH 4130
+      concurrent: false
+      kind: course
+    - code: MATH 4140
+      concurrent: false
+      kind: course
     - code: MATH 4310
       concurrent: false
       kind: course
@@ -1399,15 +1412,17 @@ MATH 6620:
   coreq_text: null
   parsed:
     items:
-    - code: MATH 6520
-      concurrent: false
-      kind: course
-    - code: MATH 4130
-      concurrent: false
-      kind: course
-    - code: MATH 4140
-      concurrent: false
-      kind: course
+    - items:
+      - code: MATH 6520
+        concurrent: false
+        kind: course
+      - code: MATH 4130
+        concurrent: false
+        kind: course
+      - code: MATH 4140
+        concurrent: false
+        kind: course
+      kind: any
     - code: MATH 4310
       concurrent: false
       kind: course
@@ -1440,14 +1455,14 @@ MATH 6640:
   parsed:
     items:
     - items:
-      - items:
-        - code: MATH 4130
-          concurrent: false
-          kind: course
-        - code: MATH 4180
-          concurrent: false
-          kind: course
-        kind: any
+      - code: MATH 4130
+        concurrent: false
+        kind: course
+      - code: MATH 4180
+        concurrent: false
+        kind: course
+      kind: any
+    - items:
       - code: MATH 4530
         concurrent: false
         kind: course
@@ -1457,10 +1472,8 @@ MATH 6640:
       - code: MATH 4560
         concurrent: false
         kind: course
-      kind: all
-    - kind: flag
-      text: permission of instructor
-    kind: any
+      kind: any
+    kind: all
   reviewed: false
   text: "Prerequisite: Strong performance in undergraduate analysis (e.g., MATH 4130\_or MATH 4180) and\
     \ topology/geometry (e.g., MATH 4530, MATH 4550, or MATH 4560); or permission of instructor."
@@ -1591,34 +1604,28 @@ MATH 6870:
   coreq_text: null
   parsed:
     items:
-    - items:
-      - code: MATH 6210
-        concurrent: false
-        kind: course
-      - code: MATH 6810
-        concurrent: false
-        kind: course
-      kind: all
-    - kind: flag
-      text: permission of instructor
-    kind: any
+    - code: MATH 6210
+      concurrent: false
+      kind: course
+    - code: MATH 6810
+      concurrent: false
+      kind: course
+    kind: all
   reviewed: false
   text: MATH 6210 and MATH 6810; or permission of instructor.
 MATH 7130:
   coreq_text: null
   parsed:
     items:
-    - items:
-      - code: MATH 6110
-        concurrent: false
-        kind: course
-      - code: MATH 4130
-        concurrent: false
-        kind: course
-      - code: MATH 4140
-        concurrent: false
-        kind: course
-      kind: any
+    - code: MATH 6110
+      concurrent: false
+      kind: course
+    - code: MATH 4130
+      concurrent: false
+      kind: course
+    - code: MATH 4140
+      concurrent: false
+      kind: course
     - items:
       - code: MATH 4310
         concurrent: false
@@ -1627,9 +1634,6 @@ MATH 7130:
         concurrent: false
         kind: course
       kind: any
-    - code: MATH 6110
-      concurrent: false
-      kind: course
     kind: all
   reviewed: false
   text: some basic measure theory, Lp spaces, and (basic) functional analysis (e.g., MATH 6110). Advanced

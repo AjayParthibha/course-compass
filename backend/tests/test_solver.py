@@ -1,7 +1,7 @@
 import random
 
 from app.catalog.store import Catalog
-from app.planner.audit import audit
+from app.planner.audit import audit, greedy_audit
 from app.planner.solver import Options, PlanModel, build_units, check_plan
 from app.planner.validate import validate
 from app.requirements.loader import get_program
@@ -127,8 +127,13 @@ def test_exact_assignment_beats_the_greedy_audit(catalog):
     local = Catalog([c for c in catalog.courses.values() if c.code != "PSYCH 1101"] + [psych])
     plan = [place("ECON 1110", "FA25", credits=3), place("PSYCH 1101", "SP26", credits=3)]
 
-    greedy = {r.id: r.status for r in audit(plan, program, local).requirements}
+    greedy = {r.id: r.status for r in greedy_audit(plan, program, local).requirements}
     assert greedy == {"social": "done", "econ": "missing"}
+    # the app's audit is the exact one now
+    assert {r.id: r.status for r in audit(plan, program, local).requirements} == {
+        "social": "done",
+        "econ": "done",
+    }
 
     exact = check_plan(plan, TERMS, NOW, local, program, requirements="maximize")
     assert exact.satisfied >= {"social", "econ"}

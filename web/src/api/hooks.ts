@@ -61,6 +61,29 @@ export function useUpdatePlanSettings() {
   })
 }
 
+/**
+ * Record or withdraw an advisor's approval for a rule that allows one (an external
+ * specialization mixing subjects). The audit and the slot's options change with it.
+ */
+export function useSetApproval() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ requirement, approved }: { requirement: string; approved: boolean }) =>
+      unwrap(
+        api.PUT('/api/profile/approvals/{requirement_id}', {
+          params: { path: { requirement_id: requirement } },
+          body: { approved },
+        }),
+      ),
+    onSuccess: (student) => {
+      qc.setQueryData(keys.me, student)
+      qc.invalidateQueries({ queryKey: keys.plan })
+      qc.invalidateQueries({ queryKey: ['candidates'] })
+      qc.invalidateQueries({ queryKey: keys.profile })
+    },
+  })
+}
+
 export function useUndo() {
   const qc = useQueryClient()
   return useMutation({

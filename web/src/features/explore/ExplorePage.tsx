@@ -7,7 +7,7 @@ import { cureviewsUrl } from '../../ui/links'
 import { termLabel } from '../../ui/terms'
 import { useNotForMe } from './notForMe'
 import SlotIndex from './SlotIndex'
-import Specialization from './Specialization'
+import Specialization, { Approval } from './Specialization'
 import { openSlots, slotHref } from './slots'
 
 type CourseSummary = Candidate['course']
@@ -240,6 +240,9 @@ function SlotOptions({ slotId, term: urlTerm, placementId }: { slotId: string; t
             {data.eligible_count} {data.eligible_count === 1 ? 'course' : 'courses'} would satisfy this slot in{' '}
             {termLabel(term, true)} and fit your prerequisites.
           </p>
+        )}
+        {data && !data.same_subject && data.approval?.approved && (
+          <Approval slotId={data.slot_id} approval={data.approval} />
         )}
         {slots.length > 1 && (
           <div className="flex flex-wrap items-center gap-2">

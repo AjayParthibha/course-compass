@@ -58,6 +58,8 @@ class Student(Schema):
     max_credits: int
     # per-term overrides of max_credits for remaining terms, e.g. {"SP27": 15}
     term_caps: dict[str, int] = {}
+    # requirement ids the student's advisor approved an exception for
+    approvals: list[str] = []
     memory_enabled: bool
     onboarded: bool
 
@@ -84,6 +86,10 @@ class PlanSettingsUpdate(Schema):
     graduation_term: Term | None = None
     max_credits: CreditCap | None = None
     term_caps: dict[Term, CreditCap] | None = None
+
+
+class ApprovalUpdate(Schema):
+    approved: bool
 
 
 class Profile(Schema):

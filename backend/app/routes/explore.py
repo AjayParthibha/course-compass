@@ -10,6 +10,7 @@ from app.planner.eligible import by_offering, courses_by_subject, list_eligible,
 from app.routes.auth import DB, CurrentStudent
 from app.schemas.courses import Course
 from app.schemas.explore import (
+    ApprovalState,
     Area,
     BlockedCourse,
     Candidate,
@@ -131,6 +132,7 @@ def areas(
         counted=[c.summary() for c in counted_courses],
         caps=req.max_cross_listed,
         areas=out,
+        approval=approval_state(req, student),
     )
 
 
@@ -216,7 +218,14 @@ def candidates(
         same_subject=req.same_subject,
         subject=subject,
         blocked=blocked,
+        approval=approval_state(req, student),
     )
+
+
+def approval_state(req: Requirement, student: models.Student) -> ApprovalState | None:
+    if not req.approval:
+        return None
+    return ApprovalState(label=req.approval, approved=req.id in (student.approvals or []))
 
 
 def _course_or_404(code: str) -> Course:

@@ -56,6 +56,13 @@ class BlockedCourse(Schema):
     reason: str
 
 
+class ApprovalState(Schema):
+    """An exception the catalog lets an advisor approve for this rule."""
+
+    label: str
+    approved: bool
+
+
 class SlotCandidates(Schema):
     slot_id: str
     slot_label: str
@@ -70,6 +77,7 @@ class SlotCandidates(Schema):
     # set when the list is narrowed to one subject (same-subject rules)
     subject: str | None = None
     blocked: list[BlockedCourse] = []
+    approval: ApprovalState | None = None
 
 
 class Area(Schema):
@@ -94,3 +102,4 @@ class SlotAreas(Schema):
     counted: list[CourseSummary] = []
     caps: dict[str, int] = {}
     areas: list[Area]
+    approval: ApprovalState | None = None
