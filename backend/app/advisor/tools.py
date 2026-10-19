@@ -29,6 +29,8 @@ class ToolContext:
     student: models.Student
     conversation_id: int | None = None
     events: list[BaseModel] = field(default_factory=list)  # pushed to the UI after the call
+    # proposals made with propose_changes this turn; events is emptied after every call
+    drafts: list[int] = field(default_factory=list)
     end_turn: bool = False
 
 
@@ -193,6 +195,7 @@ def propose_changes(
     move, remove or replace them."""
     proposal = services.create_proposal(ctx.db, ctx.student, ops, summary, changes, rejected)
     ctx.events.append(ProposalEvent(proposal=proposal))
+    ctx.drafts.append(proposal.id)
     blocking = [v.message for v in proposal.violations if v.blocking]
     summary = "proposal ready" if not blocking else f"proposal has {len(blocking)} problems"
     return ToolResult(proposal.model_dump(mode="json"), summary)
@@ -261,11 +264,11 @@ def _withdraw_broken_drafts(ctx: ToolContext) -> list[int]:
     """Discard proposals made earlier in this turn that the planner flagged, so the
     student isn't left with a broken draft next to the working one."""
     ids = []
-    for e in ctx.events:
-        if not isinstance(e, ProposalEvent) or not any(v.blocking for v in e.proposal.violations):
+    for pid in ctx.drafts:
+        row = services.get_proposal(ctx.db, ctx.student, pid)
+        if row is None or row.status != "pending":
             continue
-        row = services.get_proposal(ctx.db, ctx.student, e.proposal.id)
-        if row is not None and row.status == "pending":
+        if any(v.get("blocking") for v in row.violations):
             row.status = "discarded"
             ids.append(row.id)
     if ids:
