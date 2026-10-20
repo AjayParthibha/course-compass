@@ -7,9 +7,10 @@ const PREF_KEY = 'cc-advisor-open'
 /** from here up the advisor docks beside the plan instead of opening as a drawer */
 export const WIDE_QUERY = '(min-width: 1024px)'
 
+// a collapse lasts for this visit only: every new visit starts with the advisor open
 function readPref(): boolean | null {
   try {
-    const v = localStorage.getItem(PREF_KEY)
+    const v = sessionStorage.getItem(PREF_KEY)
     return v === '1' ? true : v === '0' ? false : null
   } catch {
     return null
@@ -18,7 +19,7 @@ function readPref(): boolean | null {
 
 function writePref(open: boolean) {
   try {
-    localStorage.setItem(PREF_KEY, open ? '1' : '0')
+    sessionStorage.setItem(PREF_KEY, open ? '1' : '0')
   } catch {
     // private mode or blocked storage: the choice just lasts for this visit
   }
@@ -29,7 +30,7 @@ type AdvisorState = {
   turns: Turn[]
   streaming: boolean
   draft: string
-  /** side panel on wide screens; null follows the screen-size default until the student picks */
+  /** side panel on wide screens; null (open) until the student collapses it this visit */
   open: boolean | null
   /** drawer from the right on narrow screens */
   sheetOpen: boolean
@@ -37,7 +38,7 @@ type AdvisorState = {
   visible: boolean
   unread: boolean
   setDraft: (draft: string) => void
-  /** the student's own choice, remembered across visits */
+  /** the student's own choice, remembered for this visit */
   setOpen: (open: boolean) => void
   setSheetOpen: (open: boolean) => void
   setVisible: (visible: boolean) => void

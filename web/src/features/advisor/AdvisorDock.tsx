@@ -3,8 +3,7 @@ import { useMediaQuery } from '../../ui/useMediaQuery'
 import AdvisorPanel from './AdvisorPanel'
 import { useAdvisor, WIDE_QUERY } from './store'
 
-// The side panel starts open where there's room for the graph beside it.
-const ROOMY = '(min-width: 1440px)'
+// The side panel starts open on wide screens; collapsing it lasts for the visit.
 
 function ChatIcon() {
   return (
@@ -173,13 +172,13 @@ function AdvisorPill({ unread, onOpen, ref }: OpenerProps) {
  */
 export default function AdvisorDock() {
   const wide = useMediaQuery(WIDE_QUERY)
-  const roomy = useMediaQuery(ROOMY)
   // narrow selectors: the dock shouldn't re-render for every streamed word
   const open = useAdvisor((s) => s.open)
   const sheetOpen = useAdvisor((s) => s.sheetOpen)
   const unread = useAdvisor((s) => s.unread)
   const { setOpen, setSheetOpen, setVisible } = useAdvisor.getState()
-  const sideOpen = open ?? roomy
+  // open unless the student collapsed it this visit
+  const sideOpen = open ?? true
   const visible = wide ? sideOpen : sheetOpen
   // where focus goes back to after collapsing or closing, and whether opening was the student's click
   const opener = useRef<HTMLButtonElement>(null)
