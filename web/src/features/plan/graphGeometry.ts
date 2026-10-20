@@ -79,12 +79,24 @@ const r = (n: number) => Math.round(n * 10) / 10
  * Neighbouring terms get a single S-curve through the gap between columns; longer jumps bend into
  * the nearest channel between rows, run along it, and bend back out, so they never hide behind cards.
  */
-export function edgePath(s: Box, t: Box, sy: number, ty: number, lines: number[], colGap = COL_GAP): EdgeGeometry {
+/**
+ * `gap`: how far before the target card the arrow stops, so it lands on the card's visible
+ * outline: 1px for a plain card, more when a selection or problem ring is drawn outside it.
+ */
+export function edgePath(
+  s: Box,
+  t: Box,
+  sy: number,
+  ty: number,
+  lines: number[],
+  colGap = COL_GAP,
+  gap = 1,
+): EdgeGeometry {
   const sameColumn = Math.abs(t.x - s.x) < s.w / 2
   if (sameColumn) {
     const x = Math.max(s.x + s.w, t.x + t.w)
     const reach = Math.min(16, colGap * 0.8)
-    const tx = t.x + t.w + 1
+    const tx = t.x + t.w + gap
     return {
       kind: 'same',
       d: `M${r(s.x + s.w)} ${r(sy)}C${r(x + reach)} ${r(sy)} ${r(x + reach)} ${r(ty)} ${r(tx)} ${r(ty)}`,
@@ -93,7 +105,7 @@ export function edgePath(s: Box, t: Box, sy: number, ty: number, lines: number[]
   }
   if (t.x < s.x) {
     const sx = s.x
-    const tx = t.x + t.w + 1
+    const tx = t.x + t.w + gap
     const k = Math.max(24, (sx - tx) / 2)
     return {
       kind: 'backward',
@@ -102,7 +114,7 @@ export function edgePath(s: Box, t: Box, sy: number, ty: number, lines: number[]
     }
   }
   const sx = s.x + s.w
-  const tx = t.x - 1
+  const tx = t.x - gap
   const tip = { x: tx, y: ty, dir: 1 as const }
   if (tx - sx <= colGap * 1.5 + 2) {
     const h = (tx - sx) / 2

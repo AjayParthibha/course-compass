@@ -15,10 +15,12 @@ type Props = {
   /** Changes whenever a different chain lights up, replaying the draw-in. */
   litKey: string | null
   steps: Map<string, number> | null
+  /** Card id -> how far outside the card its outline reaches (selection or problem ring). */
+  outlines: Map<string, number>
 }
 
 /** Prerequisite lines, drawn in one SVG under the cards. Purely visual: the cards carry the meaning. */
-export default memo(function GraphEdges({ edges, boxes, width, height, lit, litKey, steps }: Props) {
+export default memo(function GraphEdges({ edges, boxes, width, height, lit, litKey, steps, outlines }: Props) {
   const paths = useMemo(() => {
     const lines = gutters(boxes.values())
     const ends = anchorYs(edges, boxes)
@@ -26,9 +28,11 @@ export default memo(function GraphEdges({ edges, boxes, width, height, lit, litK
       const key = edgeKey(e)
       const end = ends.get(key)
       if (!end) return []
-      return [{ key, ...edgePath(boxes.get(e.source)!, boxes.get(e.target)!, end.sy, end.ty, lines) }]
+      // stop just outside the target's visible outline so a ring never covers the arrow
+      const gap = 1 + (outlines.get(e.target) ?? 0)
+      return [{ key, ...edgePath(boxes.get(e.source)!, boxes.get(e.target)!, end.sy, end.ty, lines, undefined, gap) }]
     })
-  }, [edges, boxes])
+  }, [edges, boxes, outlines])
 
   return (
     <svg
@@ -46,7 +50,7 @@ export default memo(function GraphEdges({ edges, boxes, width, height, lit, litK
             stroke={p.kind === 'backward' ? 'var(--color-accent)' : '#ADB3A8'}
             strokeDasharray={p.kind === 'backward' ? '3 3' : undefined}
             opacity={lit && !lit.has(p.key) ? 0.22 : 1}
-            className="transition-opacity duration-200 motion-reduce:transition-none"
+            className="transition-[opacity,d] duration-200 motion-reduce:transition-none"
           />
         ))}
       </g>

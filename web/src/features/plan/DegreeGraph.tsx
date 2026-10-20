@@ -146,6 +146,16 @@ export default function DegreeGraph({
   const { drag, clone, takeDrop } = dnd
   const dragged = drag ? byId.get(drag.id) : undefined
 
+  // How far each card's ring reaches outside it (GraphCard: the selection outline sits 4px
+  // out, a problem ring 2px), so arrows end on the outline instead of under it
+  const liftedId = drag?.id ?? null
+  const outlines = useMemo(() => {
+    const out = new Map<string, number>()
+    for (const id of problems) if (id !== liftedId) out.set(id, 2)
+    if (active && active !== liftedId) out.set(active, 4)
+    return out
+  }, [problems, active, liftedId])
+
   // ---- measuring ----
   const [geo, setGeo] = useState<Geometry>(EMPTY)
   const last = useRef<Map<string, Box> | null>(null)
@@ -411,7 +421,7 @@ export default function DegreeGraph({
             })
           }}
         >
-          <GraphEdges edges={edges} boxes={geo.boxes} width={geo.w} height={geo.h} lit={lit} litKey={litKey} steps={steps} />
+          <GraphEdges edges={edges} boxes={geo.boxes} width={geo.w} height={geo.h} lit={lit} litKey={litKey} steps={steps} outlines={outlines} />
           {columns.map((col, i) => {
             const isCurrent = i === currentIndex
             const check = dropInfo(col.term)

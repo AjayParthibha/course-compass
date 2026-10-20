@@ -107,3 +107,16 @@ describe('flipDeltas', () => {
     expect(flipDeltas(prev, next)).toEqual([{ id: 'b', dx: -148, dy: -76 }])
   })
 })
+
+describe('edge endpoints and card outlines', () => {
+  it('stop just outside the target, further when a ring is drawn around it', () => {
+    const s = box(0, 0)
+    const t = box(1, 0)
+    const lines = gutters([s, t])
+    expect(edgePath(s, t, cy(s), cy(t), lines).tip.x).toBe(t.x - 1)
+    // a selected card's outline sits 4px outside it
+    expect(edgePath(s, t, cy(s), cy(t), lines, undefined, 5).tip.x).toBe(t.x - 5)
+    // a target to the left is approached from its right side
+    expect(edgePath(t, s, cy(t), cy(s), lines, undefined, 5).tip.x).toBe(s.x + s.w + 5)
+  })
+})
