@@ -1528,6 +1528,16 @@ export interface components {
              */
             conflicts: string[];
             /**
+             * Term Loads
+             * @default []
+             */
+            term_loads: string[];
+            /**
+             * Under Minimum
+             * @default []
+             */
+            under_minimum: string[];
+            /**
              * Alternatives
              * @default []
              */
