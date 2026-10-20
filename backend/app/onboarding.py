@@ -78,6 +78,10 @@ def parse_history(text: str, catalog: Catalog) -> tuple[list[ParsedCourse], list
         found = len(rows)
         for cm in COURSE.finditer(rest):
             if cm.group(1).upper() not in subjects:
+                # a capitalised code we don't know ("ECNO 1110") is worth asking about; a
+                # lowercase word or a year next to a number isn't
+                if cm.group(1).isupper() and not re.fullmatch(r"20\d\d", cm.group(2)):
+                    rows.append(_row(f"{cm.group(1)} {cm.group(2)}", term, None, catalog, seen))
                 continue
             raw = f"{cm.group(1).upper()} {cm.group(2)}"
             after = rest[cm.end() : cm.end() + 12]

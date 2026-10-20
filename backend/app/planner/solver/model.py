@@ -232,8 +232,15 @@ class PlanModel:
             if u.dup_key:
                 groups.setdefault(u.dup_key, []).append(u)
         for group in groups.values():
-            if len(group) > 1:
-                self.m.AddAtMostOne(self.present[u.id] for u in group)
+            if len(group) < 2:
+                continue
+            # copies already taken stay (repeats are history); nothing more may be added
+            planned = [self.present[u.id] for u in group if u.status == "planned"]
+            if len(planned) < len(group):
+                for p in planned:
+                    self.m.Add(p == 0)
+            else:
+                self.m.AddAtMostOne(planned)
 
     # requirements ----------------------------------------------------------------
 

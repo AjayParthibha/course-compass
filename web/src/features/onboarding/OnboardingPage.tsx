@@ -2,12 +2,24 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, unwrap } from '../../api/client'
 import { keys, useMe, useOnboardingOptions, useSignOut } from '../../api/hooks'
-import type { ParsedCourse, ParseResult } from '../../api/types'
+import type { ParsedCourse } from '../../api/types'
 import { Button, Logo, SectionLabel } from '../../ui'
 import { termLabel } from '../../ui/terms'
 import { termIndex, termsAfter } from '../profile/settings'
+import CourseSearch, { type PickedCourse } from './CourseSearch'
 import GoalsStep from './GoalsStep'
 import { graduationTerms, olderRules, type Stage, stageOf, startingChoices } from './goals'
+
+type Review = { courses: ParsedCourse[]; unread: string[]; skipped: string[] }
+
+const toBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '')
+    reader.onerror = () => reject(new Error('That file couldn’t be read.'))
+    reader.readAsDataURL(file)
+  })
+
 const PROGRAMS = [
   { id: 'cs-eng', label: 'Engineering (B.S.)' },
   { id: 'cs-as', label: 'Arts & Sciences (B.A.)' },
@@ -70,16 +82,53 @@ function Steps({ step, stage }: { step: number; stage: Stage }) {
   )
 }
 
+/** One term on the review step, with a way to add a course the reading missed. */
+function TermGroup({ label, onAdd, children }: { label: string; onAdd: (c: PickedCourse) => void; children: React.ReactNode }) {
+  const [adding, setAdding] = useState(false)
+  return (
+    <div className="rounded-xl border border-line bg-white">
+      <SectionLabel className="px-4 pt-3 pb-1">{label}</SectionLabel>
+      <ul className="m-0 list-none p-0">{children}</ul>
+      <div className="border-t border-line-soft px-4 py-2.5">
+        {adding ? (
+          <CourseSearch
+            autoFocus
+            label={`Add a course to ${label}`}
+            onPick={(c) => {
+              onAdd(c)
+              setAdding(false)
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            aria-label={`Add a course to ${label}`}
+            className="border-0 bg-transparent p-0 text-[13.5px] font-semibold underline underline-offset-2"
+          >
+            + Add a course
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Row({
   course,
   choice,
   onChoose,
+  onReplace,
+  onRemove,
 }: {
   course: ParsedCourse
   choice: string | undefined
   onChoose: (value: string) => void
+  onReplace: (c: PickedCourse) => void
+  onRemove: () => void
 }) {
-  const [typed, setTyped] = useState('')
+  const name = course.code ?? course.raw
   const issue = course.issue
   const resolved = !issue || choice !== undefined
   const picked = issue?.kind === 'ambiguous_code' && choice !== undefined
@@ -98,6 +147,14 @@ function Row({
         >
           {!issue ? 'Matched' : resolved ? (choice === 'drop' ? 'Left out' : 'Confirmed') : issueLabel[issue.kind]}
         </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remove ${name}`}
+          className="border-0 bg-transparent p-0 text-[13px] text-muted underline underline-offset-2"
+        >
+          Remove
+        </button>
       </div>
       {course.note && <span className="text-[12.5px] text-muted">{course.note}</span>}
       {issue && !resolved && (
@@ -105,29 +162,15 @@ function Row({
           <span className="text-[13.5px]">{issue.message}</span>
           <div className="flex flex-wrap gap-2">
             {issue.options.map((o) => (
-              <Button key={o.value} onClick={() => onChoose(o.value)}>
+              <Button key={o.value} aria-label={`${o.label} (${name})`} onClick={() => onChoose(o.value)}>
                 {o.label}
               </Button>
             ))}
-            {issue.kind === 'unknown_course' && (
-              <form
-                className="flex gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  if (typed.trim()) onChoose(typed.trim().toUpperCase())
-                }}
-              >
-                <input
-                  value={typed}
-                  onChange={(e) => setTyped(e.target.value)}
-                  placeholder="e.g. ENGL 1170"
-                  aria-label="Course code"
-                  className="h-9 w-36 rounded-md border border-[#C3C9BC] bg-white px-2 font-mono"
-                />
-                <Button type="submit">Use this</Button>
-              </form>
-            )}
           </div>
+          {/* a course we couldn't match, or a "211x" with no listed options: find it in the roster */}
+          {(issue.kind === 'unknown_course' || (issue.kind === 'ambiguous_code' && issue.options.length === 0)) && (
+            <CourseSearch label={`Find the course for ${name}`} onPick={onReplace} />
+          )}
         </div>
       )}
     </li>
@@ -145,13 +188,15 @@ export default function OnboardingPage() {
   const [entering, setEntering] = useState(start.entering)
   const [graduating, setGraduating] = useState(start.graduating)
   const [text, setText] = useState('')
-  const [parsed, setParsed] = useState<ParseResult | null>(null)
+  // what was read, from pasted text or a transcript; the student edits it on the review step
+  const [parsed, setParsed] = useState<Review | null>(null)
   const [choices, setChoices] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   // confirmed courses wait here until the goals step, where the plan is built with the
   // semester load the student picks
   const [pending, setPending] = useState<Confirmed[]>([])
+  const [dragging, setDragging] = useState(false)
 
   const read = async () => {
     setBusy(true)
@@ -160,7 +205,7 @@ export default function OnboardingPage() {
       const result = await unwrap(
         api.POST('/api/onboarding/parse', { body: { text, program, entering_term: entering } }),
       )
-      setParsed(result)
+      setParsed({ courses: result.courses, unread: result.unread, skipped: [] })
       setChoices({})
       setStep(1)
     } catch (e) {
@@ -169,6 +214,54 @@ export default function OnboardingPage() {
       setBusy(false)
     }
   }
+
+  const upload = async (file: File | undefined) => {
+    if (!file) return
+    setError(null)
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setError('Upload the transcript as a PDF, or paste your courses instead.')
+      return
+    }
+    if (file.size > 5_000_000) {
+      setError('That file is larger than a transcript should be (5 MB).')
+      return
+    }
+    setBusy(true)
+    try {
+      const result = await unwrap(
+        api.POST('/api/onboarding/transcript', { body: { pdf_base64: await toBase64(file) } }),
+      )
+      if (result.program && PROGRAMS.some((p) => p.id === result.program)) setProgram(result.program)
+      const first = result.entering_term
+      if (first && options && !options.entering_terms.includes(first)) {
+        setError(
+          `Your transcript starts in ${termLabel(first, true)}. CourseCompass only has degree rules for students ` +
+            `who started in ${termLabel(options.entering_terms[0], true)} or later, so it can’t plan for you yet.`,
+        )
+        return
+      }
+      if (first) pickEntering(first)
+      setParsed({ courses: result.courses, unread: result.unread, skipped: result.skipped })
+      setChoices({})
+      setStep(1)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const edit = (update: (courses: ParsedCourse[]) => ParsedCourse[]) =>
+    setParsed((p) => (p ? { ...p, courses: update(p.courses) } : p))
+  const remove = (id: string) => edit((cs) => cs.filter((c) => c.id !== id))
+  // a course picked from the roster replaces a row we couldn't match, or adds one to a term
+  const replace = (id: string, c: PickedCourse) =>
+    edit((cs) => cs.map((r) => (r.id === id ? { ...r, code: c.code, title: c.title, credits: c.credits, issue: null } : r)))
+  const add = (term: string | null, c: PickedCourse) =>
+    edit((cs) => [
+      ...cs,
+      { id: crypto.randomUUID().slice(0, 8), raw: c.code, term, code: c.code, title: c.title, credits: c.credits, issue: null, note: null },
+    ])
 
   const current = options?.current_term
   const stage: Stage = current ? stageOf(entering, current) : 'continuing'
@@ -206,18 +299,26 @@ export default function OnboardingPage() {
       if (c.issue?.kind === 'ambiguous_code' || c.issue?.kind === 'unknown_course')
         return [{ term: c.term, code: choice }]
       if (c.issue?.kind === 'credit_mismatch') return [{ term: c.term, code: c.code!, credits: Number(choice) }]
-      return c.code ? [{ term: c.term, code: c.code }] : []
+      // transcript credits are what was earned (variable-credit courses differ from the roster)
+      return c.code ? [{ term: c.term, code: c.code, credits: c.credits ?? undefined }] : []
     })
     setPending(courses)
     setStep(2)
   }
 
   const left = parsed ? parsed.courses.filter((c) => c.issue && choices[c.id] === undefined).length : 0
+  // every term from the first one to now, so a missing course can be added to an empty term
+  const history = current && stage !== 'incoming' ? [entering, ...termsAfter(entering, current, 20)] : []
+  const terms = [
+    ...new Set([
+      ...(parsed?.courses.some((c) => !c.term) ? [''] : []),
+      ...[...history, ...(parsed?.courses.flatMap((c) => (c.term ? [c.term] : [])) ?? [])].sort(
+        (a, b) => termIndex(a) - termIndex(b),
+      ),
+    ]),
+  ]
   const groups = parsed
-    ? [...new Set(parsed.courses.map((c) => c.term ?? ''))].map((term) => ({
-        term,
-        courses: parsed.courses.filter((c) => (c.term ?? '') === term),
-      }))
+    ? terms.map((term) => ({ term, courses: parsed.courses.filter((c) => (c.term ?? '') === term) }))
     : []
 
   return (
@@ -283,7 +384,7 @@ export default function OnboardingPage() {
                   You start in {termLabel(entering, true)}, so there’s nothing to import. We’ll lay out every
                   requirement as open slots across your semesters, and you fill them in as you go.
                 </p>
-                {error && <p className="m-0 text-accent">{error}</p>}
+                {error && <p role="alert" className="m-0 text-accent">{error}</p>}
                 <Button
                   variant="primary"
                   className="h-11 self-end"
@@ -298,9 +399,49 @@ export default function OnboardingPage() {
               </>
             ) : (
               <>
+                {stage === 'continuing' && (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setDragging(true)
+                    }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      setDragging(false)
+                      upload(e.dataTransfer.files[0])
+                    }}
+                    className={`flex flex-wrap items-center gap-x-5 gap-y-3 rounded-xl border-2 border-dashed px-5 py-4 ${
+                      dragging ? 'border-ink bg-chip' : 'border-[#C3C9BC] bg-ground'
+                    }`}
+                  >
+                    <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-1">
+                      <span className="font-semibold">Upload your unofficial transcript</span>
+                      <span className="text-[13px] text-muted">
+                        The PDF from Student Center. Drop it here or choose it. We read your courses, terms and
+                        credits, including AP credit, and don’t keep the file or your grades.
+                      </span>
+                    </div>
+                    <label className={`inline-flex h-11 cursor-pointer items-center rounded-md bg-ink px-4 font-semibold text-paper ${busy ? 'opacity-60' : ''}`}>
+                      {busy ? 'Reading…' : 'Choose PDF'}
+                      <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        className="sr-only"
+                        disabled={busy}
+                        onChange={(e) => {
+                          upload(e.target.files?.[0])
+                          e.target.value = ''
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
                 <label className="flex flex-col gap-2">
                   <span className="font-semibold">
-                    {stage === 'first' ? `What are you taking in ${termLabel(entering, true)}?` : 'Paste your courses'}
+                    {stage === 'first'
+                      ? `What are you taking in ${termLabel(entering, true)}?`
+                      : 'Or paste your courses'}
                   </span>
                   <span className="text-[13px] text-muted">
                     {stage === 'first'
@@ -315,7 +456,7 @@ export default function OnboardingPage() {
                     className="rounded-md border border-[#C3C9BC] p-3 font-mono text-[13px]"
                   />
                 </label>
-                {error && <p className="m-0 text-accent">{error}</p>}
+                {error && <p role="alert" className="m-0 text-accent">{error}</p>}
                 <Button variant="primary" className="h-11 self-end" disabled={busy || !text.trim()} onClick={read}>
                   Read my courses
                 </Button>
@@ -336,17 +477,31 @@ export default function OnboardingPage() {
               </p>
             </div>
             {groups.map((g) => (
-              <div key={g.term} className="rounded-xl border border-line bg-white">
-                <SectionLabel className="px-4 pt-3 pb-1">
-                  {g.term ? termLabel(g.term, true) : stage === 'first' ? termLabel(entering, true) : 'Before Cornell'}
-                </SectionLabel>
-                <ul className="m-0 list-none p-0">
-                  {g.courses.map((c) => (
-                    <Row key={c.id} course={c} choice={choices[c.id]} onChoose={(v) => setChoices((s) => ({ ...s, [c.id]: v }))} />
-                  ))}
+              <TermGroup
+                key={g.term}
+                label={g.term ? termLabel(g.term, true) : stage === 'first' ? termLabel(entering, true) : 'Before Cornell'}
+                onAdd={(c) => add(g.term || null, c)}
+              >
+                {g.courses.map((c) => (
+                  <Row
+                    key={c.id}
+                    course={c}
+                    choice={choices[c.id]}
+                    onChoose={(v) => setChoices((s) => ({ ...s, [c.id]: v }))}
+                    onReplace={(picked) => replace(c.id, picked)}
+                    onRemove={() => remove(c.id)}
+                  />
+                ))}
+              </TermGroup>
+            ))}
+            {parsed.skipped.length > 0 && (
+              <div className="flex flex-col gap-1 rounded-xl border border-line-soft px-4 py-3">
+                <span className="font-semibold">Not counted from your transcript</span>
+                <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-[13px] text-muted">
+                  {parsed.skipped.map((line, i) => <li key={i}>{line}</li>)}
                 </ul>
               </div>
-            ))}
+            )}
             {parsed.unread.length > 0 && (
               <div role="status" className="flex flex-col gap-1.5 rounded-xl border border-line bg-highlight/30 px-4 py-3">
                 <span className="font-semibold">
@@ -360,7 +515,7 @@ export default function OnboardingPage() {
                 </span>
               </div>
             )}
-            {error && <p className="m-0 text-accent">{error}</p>}
+            {error && <p role="alert" className="m-0 text-accent">{error}</p>}
             <div className="flex items-center justify-between gap-3">
               <Button onClick={() => setStep(0)}>Back</Button>
               <span className="text-[13px] text-muted">We’ll never count a course you haven’t confirmed.</span>

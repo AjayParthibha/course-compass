@@ -378,6 +378,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/onboarding/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transcript
+         * @description Read an unofficial transcript PDF: its courses by term, credit by exam, and the
+         *     start term and program it shows. The file is read in memory and not kept.
+         */
+        post: operations["transcript_api_onboarding_transcript_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/onboarding/confirm": {
         parameters: {
             query?: never;
@@ -1781,6 +1802,30 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** TranscriptRequest */
+        TranscriptRequest: {
+            /** Pdf Base64 */
+            pdf_base64: string;
+        };
+        /** TranscriptResult */
+        TranscriptResult: {
+            /** Courses */
+            courses: components["schemas"]["ParsedCourse"][];
+            /**
+             * Unread
+             * @default []
+             */
+            unread: string[];
+            /**
+             * Skipped
+             * @default []
+             */
+            skipped: string[];
+            /** Entering Term */
+            entering_term: string | null;
+            /** Program */
+            program: string | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -2538,6 +2583,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParseResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transcript_api_onboarding_transcript_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranscriptRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptResult"];
                 };
             };
             /** @description Validation Error */

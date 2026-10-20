@@ -111,12 +111,17 @@ def validate(
             continue
         key = min(catalog.equivalents(p.course))
         if key in seen:
+            # a course already taken twice is history (a repeat, or a project team
+            # each term); only a planned copy is something to fix
+            taken = seen[key].status != "planned" and p.status != "planned"
             violations.append(
                 Violation(
                     kind="duplicate",
-                    message=f"{p.course} is in the plan twice",
+                    message=f"{p.course} was taken twice; it counts once"
+                    if taken
+                    else f"{p.course} is in the plan twice",
                     placement_ids=[seen[key].id, p.id],
-                    blocking=True,
+                    blocking=not taken,
                 )
             )
         seen[key] = p

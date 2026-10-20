@@ -1,3 +1,6 @@
+import base64
+import binascii
+
 from fastapi import APIRouter, HTTPException
 
 from app import models, services
@@ -8,8 +11,16 @@ from app.planner.initial import seed_slots
 from app.planner.ops import new_id, next_term, term_index, terms_between
 from app.requirements.loader import PROGRAMS, available_years, get_program, rules_year_for
 from app.routes.auth import DB, CurrentStudent
-from app.schemas.onboarding import ConfirmRequest, OnboardingOptions, ParseRequest, ParseResult
+from app.schemas.onboarding import (
+    ConfirmRequest,
+    OnboardingOptions,
+    ParseRequest,
+    ParseResult,
+    TranscriptRequest,
+    TranscriptResult,
+)
 from app.schemas.plans import Placement, PlanState
+from app.transcript import TranscriptError, parse_transcript, transcript_text
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
@@ -46,6 +57,25 @@ def parse(body: ParseRequest, student: CurrentStudent) -> ParseResult:
     year = _catalog_year(body.program, body.entering_term)
     courses, unread = parse_history(body.text, get_catalog())
     return ParseResult(courses=courses, catalog_year=year, unread=unread)
+
+
+MAX_TRANSCRIPT_BYTES = 5_000_000
+
+
+@router.post("/transcript")
+def transcript(body: TranscriptRequest, student: CurrentStudent) -> TranscriptResult:
+    """Read an unofficial transcript PDF: its courses by term, credit by exam, and the
+    start term and program it shows. The file is read in memory and not kept."""
+    try:
+        pdf = base64.b64decode(body.pdf_base64, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(400, "That file couldn't be read.") from None
+    if len(pdf) > MAX_TRANSCRIPT_BYTES:
+        raise HTTPException(413, "That file is larger than a transcript should be (5 MB).")
+    try:
+        return parse_transcript(transcript_text(pdf), get_catalog())
+    except TranscriptError as e:
+        raise HTTPException(400, str(e)) from None
 
 
 @router.post("/confirm")

@@ -464,3 +464,9 @@ def test_history_reads_student_center_terms_any_case_and_summer(catalog):
     assert rows[2].note == "Taken in Summer 2025; counted with Spring 2025"
     # a line that looks like it names a course but can't be read is reported, not dropped
     assert unread == ["EC0N 1110 typo"]
+    # an unknown code beside known ones becomes a row to fix, not a silent drop
+    rows, _ = parse_history("SP25 CS 2110, ZZZZ 1234", catalog)
+    assert [(r.raw, r.issue.kind if r.issue else None) for r in rows] == [
+        ("CS 2110", None),
+        ("ZZZZ 1234", "unknown_course"),
+    ]

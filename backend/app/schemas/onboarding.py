@@ -50,6 +50,21 @@ class ParseResult(Schema):
     unread: list[str] = []
 
 
+class TranscriptRequest(Schema):
+    # the unofficial transcript PDF, base64-encoded; read in memory and never stored
+    pdf_base64: str
+
+
+class TranscriptResult(Schema):
+    courses: list[ParsedCourse]
+    unread: list[str] = []
+    # courses on the transcript that earned no credit ("CS 1110 (Fall 2024): grade W")
+    skipped: list[str] = []
+    # what the transcript says, to prefill the form
+    entering_term: str | None = None
+    program: str | None = None
+
+
 class ConfirmedCourse(Schema):
     term: str | None
     code: str
