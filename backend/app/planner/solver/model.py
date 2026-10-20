@@ -366,10 +366,12 @@ class PlanModel:
 
     def _group_rules(self, r: Requirement, counted: list[tuple[Unit, cp_model.IntVar]]):
         """Category rules inside one requirement: each counted course is placed in one of
-        its groups (an open slot in any), groups can be capped, and the rule's
-        satisfaction lit later requires enough distinct groups and per-group credits."""
+        its groups, or up to `groups_per_course` of them (an open slot in any), groups
+        can be capped, and the rule's satisfaction lit later requires enough distinct
+        groups and per-group credits."""
         if r.groups:
             ids = [g.id for g in r.groups]
+            per = r.groups_per_course
             place: dict[str, list[tuple[Unit, cp_model.IntVar]]] = {g: [] for g in ids}
             for u, a in counted:
                 mine = ids if u.course is None else sorted(u.groups.get(r.id, ()))
@@ -377,7 +379,13 @@ class PlanModel:
                     self.m.Add(a == 0)  # a course outside every group can't count here
                     continue
                 bs = [self.m.NewBoolVar(f"g[{u.id},{r.id},{g}]") for g in mine]
-                self.m.Add(sum(bs) == a)
+                if per == 1 or len(bs) == 1:
+                    self.m.Add(sum(bs) == a)
+                else:
+                    # counted: in at least one of its groups and at most `per`; not
+                    # counted: in none
+                    self.m.Add(sum(bs) >= a)
+                    self.m.Add(sum(bs) <= per * a)
                 for g, b in zip(mine, bs, strict=True):
                     place[g].append((u, b))
             for g in r.groups:

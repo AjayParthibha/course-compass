@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import ConfigDict, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from app.schemas.base import Schema
 
@@ -90,6 +90,11 @@ class Requirement(RuleSchema):
     double_count_except: dict[str, list[str]] = {}
     groups: list[RequirementGroup] = []
     min_groups: int | None = None  # counted courses must span at least this many groups
+    # how many of its groups one counted course may cover: 1 for Engineering liberal
+    # studies ("a course in several is counted in one of them"), 2 for the A&S
+    # distribution ("a course can count toward at most two categories"); an open slot
+    # may cover as many, since the course picked for it can
+    groups_per_course: int = Field(default=1, ge=1)
     # {2000: 2}: at least two counted courses at the 2000 level or above
     min_at_level: dict[int, int] = {}
     # {3000: 1}: at most one counted course below the 3000 level

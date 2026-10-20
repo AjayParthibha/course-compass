@@ -577,3 +577,65 @@ def test_engineering_liberal_studies_before_fall_2024_has_no_group_7_minimum():
     # six courses from four groups, two at 2000+, and nothing from Group 7: enough here,
     # though Fall 2024 entrants also need 3 credits of race and equity
     assert statuses(plan, program(ls), cat)["ls"].status == "done"
+
+
+# one course in two categories (the A&S distribution) ----------------------------------
+
+AS_CAT = Catalog(
+    [
+        course("HIST 2500", attributes=["ALC-AS", "HST-AS"]),
+        course("PHIL 2400", attributes=["ALC-AS", "HST-AS", "ETM-AS"]),
+        course("ECON 1110", attributes=["SSC-AS"]),
+        course("PHIL 1100", attributes=["ETM-AS"]),
+    ]
+)
+
+
+def distribution(categories, count, per=2):
+    return Requirement(
+        id="dist",
+        label="Distribution",
+        kind="filter",
+        filter=CourseFilter(attributes_any=[f"{c}-AS" for c in categories]),
+        count=count,
+        groups=[
+            RequirementGroup(id=c.lower(), label=c, attributes_any=[f"{c}-AS"]) for c in categories
+        ],
+        min_groups=len(categories),
+        groups_per_course=per,
+    )
+
+
+def test_a_course_can_cover_two_categories():
+    # HIST 2500 is both ALC and HST, so two courses cover three categories
+    plan = [place("HIST 2500"), place("ECON 1110")]
+    assert (
+        statuses(plan, program(distribution(["ALC", "HST", "SSC"], 2)), AS_CAT)["dist"].status
+        == "done"
+    )
+    # with one category per course (the Engineering rule) the same plan falls short
+    rule = distribution(["ALC", "HST", "SSC"], 2, per=1)
+    assert statuses(plan, program(rule), AS_CAT)["dist"].status == "missing"
+
+
+def test_a_course_covers_at_most_two_categories():
+    # PHIL 2400 carries ALC, HST and ETM but may only count for two of them
+    rule = distribution(["ALC", "HST", "ETM", "SSC"], 2)
+    plan = [place("PHIL 2400"), place("ECON 1110")]
+    assert statuses(plan, program(rule), AS_CAT)["dist"].status == "missing"
+    # a third course that brings the missing category completes it
+    rule = distribution(["ALC", "HST", "ETM", "SSC"], 3)
+    plan = [place("PHIL 2400"), place("ECON 1110"), place("PHIL 1100")]
+    assert statuses(plan, program(rule), AS_CAT)["dist"].status == "done"
+
+
+def test_an_open_slot_can_cover_two_categories():
+    rule = distribution(["ALC", "HST", "SSC", "ETM"], 2)
+    slot = Placement(id="s", term="SP27", slot="dist", slot_label="D", credits=3, status="planned")
+    plan = [place("HIST 2500"), slot]
+    assert statuses(plan, program(rule), AS_CAT)["dist"].status == "planned"
+
+
+def test_groups_per_course_must_be_positive():
+    with pytest.raises(ValueError):
+        distribution(["ALC"], 1, per=0)
