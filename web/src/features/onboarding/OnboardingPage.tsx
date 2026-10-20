@@ -29,7 +29,6 @@ FA24  CS 1110 / MATH 1910 / CHEM 2090 / FWS
 SP25  CS 211x, MATH 1920, PHYS 1112
 FA25  CS 2800 MATH 2940 PHYS 2213 ECON 1110
 SP26  CS 3110, CS 3410, ENGRD 2700 (4cr)`
-const THIS_TERM_PLACEHOLDER = 'CS 1110, MATH 1910, CHEM 2090, ENGRI 1101, FWS'
 
 type Confirmed = { term: string | null; code: string; credits?: number }
 
@@ -197,6 +196,8 @@ export default function OnboardingPage() {
   // semester load the student picks
   const [pending, setPending] = useState<Confirmed[]>([])
   const [dragging, setDragging] = useState(false)
+  // the student chose to add courses one by one rather than upload or paste
+  const [manual, setManual] = useState(false)
 
   const read = async () => {
     setBusy(true)
@@ -207,6 +208,7 @@ export default function OnboardingPage() {
       )
       setParsed({ courses: result.courses, unread: result.unread, skipped: [] })
       setChoices({})
+      setManual(false)
       setStep(1)
     } catch (e) {
       setError((e as Error).message)
@@ -245,6 +247,7 @@ export default function OnboardingPage() {
       if (first) pickEntering(first)
       setParsed({ courses: result.courses, unread: result.unread, skipped: result.skipped })
       setChoices({})
+      setManual(false)
       setStep(1)
     } catch (e) {
       setError((e as Error).message)
@@ -253,8 +256,9 @@ export default function OnboardingPage() {
     }
   }
 
+  // a first-semester student picks courses before anything has been read, so start empty
   const edit = (update: (courses: ParsedCourse[]) => ParsedCourse[]) =>
-    setParsed((p) => (p ? { ...p, courses: update(p.courses) } : p))
+    setParsed((p) => ({ ...(p ?? { unread: [], skipped: [] }), courses: update(p?.courses ?? []) }))
   const remove = (id: string) => edit((cs) => cs.filter((c) => c.id !== id))
   // a course picked from the roster replaces a row we couldn't match, or adds one to a term
   const replace = (id: string, c: PickedCourse) =>
@@ -313,6 +317,9 @@ export default function OnboardingPage() {
   }
 
   const left = parsed ? parsed.courses.filter((c) => c.issue && choices[c.id] === undefined).length : 0
+  const none = !parsed || parsed.courses.length === 0
+  const thisTerm = parsed?.courses.filter((c) => c.term === entering) ?? []
+  const matched = parsed?.courses.filter((c) => c.code).length ?? 0
   // every term from the first one to now, so a missing course can be added to an empty term
   const history = current && stage !== 'incoming' ? [entering, ...termsAfter(entering, current, 20)] : []
   const terms = [
@@ -411,8 +418,7 @@ export default function OnboardingPage() {
               </>
             ) : (
               <>
-                {stage === 'continuing' && (
-                  <div
+                <div
                     onDragOver={(e) => {
                       e.preventDefault()
                       setDragging(true)
@@ -448,30 +454,83 @@ export default function OnboardingPage() {
                       />
                     </label>
                   </div>
+                {stage === 'first' ? (
+                  // a first semester is a handful of courses in one term: picking each from the
+                  // roster avoids typos and unknown codes, and is about as quick as typing them
+                  <div className="flex flex-col gap-2">
+                    <span className="font-semibold">Or find what you’re taking in {termLabel(entering, true)}</span>
+                    {thisTerm.length > 0 && (
+                      <ul className="m-0 flex list-none flex-col rounded-xl border border-line bg-white p-0" aria-label="Courses you’re taking">
+                        {thisTerm.map((c) => (
+                          <li key={c.id} className="flex items-center gap-3 border-t border-line-soft px-4 py-2 first:border-t-0">
+                            <span className="w-24 font-mono font-semibold">{c.code}</span>
+                            <span className="min-w-0 flex-1 truncate text-ink-soft">{c.title}</span>
+                            <span className="font-mono text-[12px] text-muted">{c.credits} cr</span>
+                            <button
+                              type="button"
+                              onClick={() => remove(c.id)}
+                              aria-label={`Remove ${c.code}`}
+                              className="border-0 bg-transparent p-0 text-[13px] text-muted underline underline-offset-2"
+                            >
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <CourseSearch label={`Add a course you’re taking in ${termLabel(entering, true)}`} onPick={(c) => add(entering, c)} />
+                    {error && <p role="alert" className="m-0 text-accent">{error}</p>}
+                    <Button
+                      variant="primary"
+                      className="h-11 self-end"
+                      disabled={busy || !thisTerm.length || unsupported}
+                      onClick={() => {
+                        // courses from another start term chosen earlier don't belong here
+                        edit((cs) => cs.filter((c) => c.term === entering))
+                        setChoices({})
+                        setManual(false)
+                        setStep(1)
+                      }}
+                    >
+                      Continue
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <label className="flex flex-col gap-2">
+                      <span className="font-semibold">Or paste your courses</span>
+                      <span className="text-[13px] text-muted">
+                        Copy from Student Center or type them out. Messy is fine: one term per line works best.
+                      </span>
+                      <textarea
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        rows={8}
+                        placeholder={PLACEHOLDER}
+                        className="rounded-md border border-[#C3C9BC] p-3 font-mono text-[13px]"
+                      />
+                    </label>
+                    {error && <p role="alert" className="m-0 text-accent">{error}</p>}
+                    <div className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2">
+                      <button
+                        type="button"
+                        disabled={busy || unsupported}
+                        onClick={() => {
+                          setParsed({ courses: [], unread: [], skipped: [] })
+                          setChoices({})
+                          setManual(true)
+                          setStep(1)
+                        }}
+                        className="border-0 bg-transparent p-0 text-[14px] font-semibold underline underline-offset-2 disabled:opacity-50"
+                      >
+                        Or add them one by one
+                      </button>
+                      <Button variant="primary" className="h-11" disabled={busy || !text.trim() || unsupported} onClick={read}>
+                        Read my courses
+                      </Button>
+                    </div>
+                  </>
                 )}
-                <label className="flex flex-col gap-2">
-                  <span className="font-semibold">
-                    {stage === 'first'
-                      ? `What are you taking in ${termLabel(entering, true)}?`
-                      : 'Or paste your courses'}
-                  </span>
-                  <span className="text-[13px] text-muted">
-                    {stage === 'first'
-                      ? 'List your courses this semester, separated by commas or one per line. Add AP or transfer credit on its own line if you have any.'
-                      : 'Copy from Student Center or type them out. Messy is fine: one term per line works best.'}
-                  </span>
-                  <textarea
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    rows={stage === 'first' ? 4 : 8}
-                    placeholder={stage === 'first' ? THIS_TERM_PLACEHOLDER : PLACEHOLDER}
-                    className="rounded-md border border-[#C3C9BC] p-3 font-mono text-[13px]"
-                  />
-                </label>
-                {error && <p role="alert" className="m-0 text-accent">{error}</p>}
-                <Button variant="primary" className="h-11 self-end" disabled={busy || !text.trim() || unsupported} onClick={read}>
-                  Read my courses
-                </Button>
               </>
             )}
           </section>
@@ -481,11 +540,13 @@ export default function OnboardingPage() {
           <section className="flex flex-col gap-4">
             <div>
               <h1 className="m-0 text-2xl font-extrabold tracking-tight">
-                {stage === 'first' ? 'Is this what you’re taking?' : 'Is this what you’ve taken?'}
+                {manual ? 'Add your courses' : stage === 'first' ? 'Is this what you’re taking?' : 'Is this what you’ve taken?'}
               </h1>
               <p className="m-0 text-muted">
-                We matched {parsed.courses.filter((c) => c.code).length} courses against the Class Roster.{' '}
-                {left === 0 ? 'Everything is confirmed.' : left === 1 ? '1 thing needs you.' : `${left} things need you.`}
+                {manual
+                  ? 'Use “Add a course” under each semester and search by code or title. Include this semester’s courses.'
+                  : `We matched ${matched} ${matched === 1 ? 'course' : 'courses'} against the Class Roster. ` +
+                    (left === 0 ? 'Everything is confirmed.' : left === 1 ? '1 thing needs you.' : `${left} things need you.`)}
               </p>
             </div>
             {groups.map((g) => (
@@ -531,8 +592,8 @@ export default function OnboardingPage() {
             <div className="flex items-center justify-between gap-3">
               <Button onClick={() => setStep(0)}>Back</Button>
               <span className="text-[13px] text-muted">We’ll never count a course you haven’t confirmed.</span>
-              <Button variant="primary" className="h-11" disabled={left > 0 || busy} onClick={confirm}>
-                {left > 0 ? `${left} left to check` : 'Looks right. Continue'}
+              <Button variant="primary" className="h-11" disabled={left > 0 || busy || none} onClick={confirm}>
+                {none ? 'Add a course to continue' : left > 0 ? `${left} left to check` : 'Looks right. Continue'}
               </Button>
             </div>
           </section>
