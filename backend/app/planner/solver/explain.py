@@ -46,6 +46,14 @@ def describe(
         case "graduate":
             (term,) = rest
             return f"Graduate by {term_label(term)}"
+        case "floor":
+            term, floor = rest
+            if floor >= 12:
+                return f"Keep {term_label(term)} at 12 credits or more (the full-time minimum)"
+            return f"Keep {term_label(term)} at {floor} credits or more (your limit)"
+        case "lighter":
+            term, load = rest
+            return f"Make {term_label(term)} lighter than its {load} credits"
         case "met":
             (rid,) = rest
             label = next((r.label for r in program.all_requirements() if r.id == rid), rid)

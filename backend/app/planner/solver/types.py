@@ -19,8 +19,8 @@ class RepairRequest(Schema):
     remove: list[str] = []  # placement ids to drop ("drop CS 3410")
     add: list[AddWish] = []
     avoid_courses: list[str] = []  # never schedule these
-    # soft: among equally small changes, prefer fewer credits here. It never causes a change
-    # on its own; to actually lighten a term, cap it in term_caps
+    # "make Fall ’27 lighter": at least one course comes out of each of these terms (the
+    # solver picks how much), never below the 12-credit full-time minimum
     lighter_terms: list[str] = []
     graduate_by: str | None = None  # finish by this term instead of the plan's last
     allow_removing_courses: bool = False  # otherwise only open slots can be dropped
@@ -38,6 +38,11 @@ class RepairResult(Schema):
     runtime_ms: int = 0
     # readable reasons when infeasible: the requests and settings that can't all hold
     conflicts: list[str] = []
+    # terms whose credits change, "Fall ’27: 15 → 12 credits", so a reply can say which
+    # terms get heavier too
+    term_loads: list[str] = []
+    # terms taken from 12+ credits to fewer, which only an explicit cap allows
+    under_minimum: list[str] = []
     # when infeasible: nearby versions of the request that do work, each checked
     alternatives: list[str] = []
     # an independent validate() of the repaired plan; should always be 0

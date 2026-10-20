@@ -32,7 +32,7 @@ from app.schemas.requirements import Program
 
 ADD_OR_DROP = 2
 MOVE = 1
-LIGHT = 12  # credits below which a term is "light" (a soft minimum)
+LIGHT = 12  # the full-time minimum: a repair won't push a term below it
 # a list this short is a choice between alternatives (CS 4410 or CS 4414), which the solver
 # may make; a longer one (the practicum list) is an elective pick, so it gets open slots
 NAMED_LIST_LIMIT = 4
@@ -108,6 +108,7 @@ def repair(
         ),
     )
     _request_constraints(model, request, units, avoided, wishes)
+    _load_rules(model, placements, request, caps)
     for u in stays:
         model.only_if(model.m.Add(model.present[u.id] == 1), model.guard(("stays", u.id)))
 
@@ -188,6 +189,13 @@ def repair(
         result.blocking = sum(
             v.blocking for v in validate(repaired, terms, catalog, max_credits, caps)
         )
+        for t in terms:
+            was = sum(p.credits for p in placements if p.term == t)
+            now = sum(p.credits for p in repaired if p.term == t)
+            if was != now:
+                result.term_loads.append(f"{term_label(t)}: {was} → {now} credits")
+            if was >= LIGHT > now:
+                result.under_minimum.append(term_label(t))
     except OpError as e:  # would mean diff_ops is wrong; surface it rather than hide it
         result.status, result.conflicts = "infeasible", [f"Internal error applying the repair: {e}"]
     result.runtime_ms = _ms(start)
@@ -325,6 +333,26 @@ def _fills(model: PlanModel, units, extra, optional) -> dict[tuple[str, str], cp
     for key in {s for s, _ in fills} | {c for _, c in fills}:
         m.AddAtMostOne(f for pair, f in fills.items() if key in pair)
     return fills
+
+
+def _load_rules(model: PlanModel, placements, request: RepairRequest, caps: dict[str, int]):
+    """A repair never takes a future term from 12+ credits (the full-time minimum) to
+    fewer; a term already under 12 is left free, and an explicit cap below 12 is the
+    student's call. "Make Fall ’27 lighter" means at least one course comes out of it: the solver
+    picks how much, not the advisor."""
+    loads = {t: sum(p.credits for p in placements if p.term == t) for t in model.terms}
+    last = model.index[request.graduate_by] if request.graduate_by else len(model.terms) - 1
+    for i in range(model.now + 1, last + 1):
+        term = model.terms[i]
+        floor = min(LIGHT, caps.get(term, LIGHT))
+        if loads[term] >= LIGHT and floor > 0:
+            g = model.guard(("floor", term, floor))
+            model.only_if(model.m.Add(model.credits_in(i) >= floor), g)
+    for term in request.lighter_terms:
+        i = model.index[term]
+        if term not in request.term_caps and i > model.now:
+            g = model.guard(("lighter", term, loads[term]))
+            model.only_if(model.m.Add(model.credits_in(i) <= loads[term] - 1), g)
 
 
 def _moved(model: PlanModel, u: Unit):

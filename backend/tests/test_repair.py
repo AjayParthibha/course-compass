@@ -288,3 +288,26 @@ def test_impossible_requests_come_with_checked_alternatives():
 
     # a solved request doesn't search for alternatives
     assert run(plan()).alternatives == []
+
+
+def five_slots():
+    # Fall ’26 holds 15 credits of open slots
+    return [slot("econ", "FA26", f"e{i}") for i in range(5)]
+
+
+def test_lighter_takes_a_course_out_but_stays_full_time():
+    r = run(five_slots(), RepairRequest(lighter_terms=["FA26"]))
+    assert r.status == "solved" and r.moved == 1  # 15 → 12, not lower
+    assert "Fall ’26: 15 → 12 credits" in r.term_loads
+    after, _ = applied(five_slots(), r)
+    assert sum(p.credits for p in after if p.term == "FA26") == 12
+
+
+def test_a_term_at_12_cant_be_made_lighter_without_saying_so():
+    plan = five_slots()[:4]  # 12 credits
+    r = run(plan, RepairRequest(lighter_terms=["FA26"]))
+    assert r.status == "infeasible"
+    assert "Keep Fall ’26 at 12 credits or more (the full-time minimum)" in r.conflicts
+    # a cap the student names below 12 is their call
+    r = run(plan, RepairRequest(term_caps={"FA26": 9}))
+    assert r.status == "solved"

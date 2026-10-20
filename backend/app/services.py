@@ -384,6 +384,8 @@ def repair_plan(
         plan.placements, plan.terms, result.ops, request, program, catalog, st
     )
     checks = ["Every degree requirement the plan met before is still met"]
+    if not result.under_minimum:
+        checks.append("No term is pushed under the 12-credit full-time minimum")
     if result.optimal:
         n = result.moved + result.added + result.removed + result.replaced
         checks.append(f"No smaller change does this ({n} change{'s' if n != 1 else ''})")

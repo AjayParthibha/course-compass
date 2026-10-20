@@ -213,11 +213,12 @@ def repair_plan(ctx: ToolContext, summary: str, request: RepairRequest) -> ToolR
 
     Fill `request` from what the student said; use placement ids from get_plan_state
     for keep/move/remove, and terms like "SP27". Leave out what they didn't ask for. For
-    "make a term lighter", cap it in term_caps below its current credits (lighter_terms
-    alone only breaks ties). Only set allow_removing_courses when they agreed to drop
-    courses.
+    "make a term lighter", put it in lighter_terms and let the solver choose how much (at
+    least one course out, never under 12 credits); set term_caps only for a number the
+    student gave. Only set allow_removing_courses when they agreed to drop courses.
 
-    The result lists `changes` in plain words; tell the student what moves where. If the
+    The result lists `changes` in plain words; tell the student what moves where, and use
+    `credit_changes` to say which terms get lighter and which get heavier. If the
     request can't be met, `conflicts` says why and `alternatives` lists nearby versions
     that were checked and do work. Offer only those alternatives, never ones you came up
     with, and don't work around the conflict with propose_changes. A broken draft you
@@ -235,6 +236,10 @@ def repair_plan(ctx: ToolContext, summary: str, request: RepairRequest) -> ToolR
         "conflicts": result.conflicts,
         "alternatives": result.alternatives,
         "smallest_possible": result.optimal,
+        # every term whose credits change, including ones that get heavier
+        "credit_changes": result.term_loads,
+        # terms this takes under 12 credits (only when the student set that cap): say so
+        "under_full_time_minimum": result.under_minimum,
         "withdrew_earlier_drafts": withdrawn,
     }
     if result.status == "infeasible":
