@@ -2,12 +2,19 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import ConfigDict, model_validator
 
 from app.schemas.base import Schema
 
 
-class QualifyingPrereq(Schema):
+class RuleSchema(Schema):
+    """Rule files are hand-written: an unknown key is a typo (or a label cut short at a
+    comma in an inline YAML map), so it's an error rather than silently dropped."""
+
+    model_config = ConfigDict(extra="forbid", json_schema_serialization_defaults_required=True)
+
+
+class QualifyingPrereq(RuleSchema):
     """A course qualifies when it lists one of these as a prerequisite or corequisite
     (the CS technical-elective rule). Prerequisites marked "recommended" don't count."""
 
@@ -18,7 +25,7 @@ class QualifyingPrereq(Schema):
     chain: bool = False  # or a prerequisite that itself has a qualifying one
 
 
-class CourseFilter(Schema):
+class CourseFilter(RuleSchema):
     subjects: list[str] = []
     exclude_subjects: list[str] = []
     min_level: int | None = None
@@ -39,7 +46,7 @@ class CourseFilter(Schema):
     qualifying_prereq: QualifyingPrereq | None = None
 
 
-class RequirementGroup(Schema):
+class RequirementGroup(RuleSchema):
     """One category inside a requirement (a liberal studies group, an engineering
     distribution category). A course belongs to it by attribute or by course code."""
 
@@ -51,7 +58,7 @@ class RequirementGroup(Schema):
     max_courses: int | None = None  # at most this many counted courses from this group
 
 
-class Requirement(Schema):
+class Requirement(RuleSchema):
     id: str
     label: str
     # total_credits: a credit total over every course matching `filter` (123 for the
@@ -104,7 +111,7 @@ class Requirement(Schema):
             yield from child.walk()
 
 
-class RequirementSet(Schema):
+class RequirementSet(RuleSchema):
     id: str
     label: str
     catalog_year: str

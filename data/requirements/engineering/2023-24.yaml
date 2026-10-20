@@ -1,0 +1,149 @@
+# College of Engineering rules for CS majors who entered in Fall 2023. Sources, checked
+# 2026-10-19:
+#  - the Engineering Undergraduate Handbook, Fall 2023 ("Requirements for the Bachelor of
+#    Science Degree", "The Academic Program", "Major: Computer Science"):
+#    https://cornellengineeringhandbook.freeflowdp.com/cornellengineeringhandbook/fall_2023
+#  - "Liberal Studies Policy for Students Entering Fall 2020 through Spring 2024":
+#    https://www.engineering.cornell.edu/courses-requirements/bachelor-science-requirements/liberal-studies/liberal-studies-policy-for-students-entering-fall-2020-through-spring-2024/
+# Not modelled: math and science credits >= 31 (handbook), letter and minimum grades.
+id: engineering
+label: College of Engineering
+catalog_year: 2023-24
+source_url: https://cornellengineeringhandbook.freeflowdp.com/cornellengineeringhandbook/fall_2023
+verified: false
+requirements:
+  - id: eng-physics
+    label: Physics
+    kind: all_of
+    children:
+      - {id: eng-phys-mech, label: PHYS 1112 or 1116, kind: courses, courses: [PHYS 1112, PHYS 1116], count: 1}
+      # the 1-credit lab; on the checklist and in the catalog's normal and honors programs
+      - {id: eng-phys-lab, label: PHYS 1110 lab, kind: courses, courses: [PHYS 1110], count: 1}
+      - {id: eng-phys-em, label: PHYS 2213 or 2217, kind: courses, courses: [PHYS 2213, PHYS 2217], count: 1}
+
+  - id: eng-chem
+    label: Chemistry
+    kind: courses
+    courses: [CHEM 2090]
+    notes: From Fall 2025 the lab is a separate 1-credit course, CHEM 2091.
+
+  # CS's fourth science (handbook): CHEM 2080, or "may substitute CHEM 2150, BTRY 3080,
+  # ECE 3100, ECON 3130, MATH 2930, MATH 4710, PHYS 2214, PHYS 2218, or STSCI 3080"
+  - id: eng-fourth-science
+    label: Fourth science
+    kind: courses
+    courses: [CHEM 2080, CHEM 2150, BTRY 3080, ECE 3100, ECON 3130, MATH 2930, MATH 4710, PHYS 2214, PHYS 2218, STSCI 3080]
+    count: 1
+
+  # "Two engineering distribution (ENGRD) courses (6-8 credits) must be selected from two
+  # different categories"; the categories and their courses are the Fall 2023 handbook's
+  - id: eng-distribution
+    label: Engineering distribution
+    kind: courses
+    courses: [ENGRD 2110, ENGRD 2112, ENGRD 2140, ENGRD 3200, ENGRD 2610, ENGRD 2620, ENGRD 2020, ENGRD 2700, ENGRD 2720, ENGRD 2100, ENGRD 2300, ENGRD 2550, ENGRD 2190, ENGRD 2210, ENGRD 2250, ENGRD 2400, ENGRD 2510, ENGRD 2600, ENGRD 2202, ENGRD 2520, CHEM 3890, BIOMG 3300, BIOMG 3310, BIOMG 3350]
+    count: 2
+    groups:
+      - {id: computing, label: Scientific computing, courses: [ENGRD 2110, ENGRD 2112, ENGRD 2140, ENGRD 3200]}
+      - {id: materials, label: Materials science, courses: [ENGRD 2610, ENGRD 2620]}
+      - {id: mechanics, label: Mechanics, courses: [ENGRD 2020]}
+      - {id: probability, label: Probability and statistics, courses: [ENGRD 2700, ENGRD 2720]}
+      - {id: electrical, label: Electrical sciences, courses: [ENGRD 2100, ENGRD 2300, ENGRD 2550]}
+      - {id: thermo, label: Thermodynamics and energy balances, courses: [ENGRD 2190, ENGRD 2210]}
+      - {id: earth-life, label: Earth and life sciences, courses: [ENGRD 2250, ENGRD 2400, ENGRD 2510, ENGRD 2600]}
+      - {id: bio-chem, label: Biology and chemistry, courses: [ENGRD 2202, ENGRD 2520, CHEM 3890, BIOMG 3300, BIOMG 3310, BIOMG 3350]}
+    min_groups: 2
+    # CS 2110/2112 count here through their ENGRD cross-listing (the handbook's first
+    # distribution row for CS is "ENGRD 2110 or ENGRD 2112")
+    double_count: [intro-2110]
+
+  - id: eng-intro
+    label: Intro to engineering (ENGRI)
+    kind: filter
+    filter: {subjects: [ENGRI]}
+    count: 1
+    # where the starter plan puts its slot, not a rule: part of the first-year curriculum
+    seed: earliest
+
+  - id: fws
+    label: First-year writing seminars
+    kind: filter
+    filter: {title_prefix: "FWS:"}
+    count: 2
+    seed: earliest
+    notes: Matched by roster title; every FWS title starts with "FWS:".
+
+  # the handbook's Category 6 options open to CS majors (6A: ENGRC courses, the co-op,
+  # 3023 attachments, 1-credit partner courses, 3341; 6B: COMM 3020 or 3030); a major's
+  # own writing- or communication-intensive courses also count but aren't listed
+  - id: eng-comm
+    label: Engineering communications
+    kind: courses
+    courses: [ENGRC 3020, ENGRC 3023, ENGRC 3024, ENGRC 3025, ENGRC 3026, ENGRC 3027, ENGRC 3120, ENGRC 3152, ENGRC 3340, ENGRC 3341, ENGRC 3350, ENGRC 3500, ENGRC 3610, ENGRC 3700, ENGRC 4152, ENGRC 4590, COMM 3020, COMM 3030]
+    count: 1
+    # "may be taken as a liberal studies, Advisor-approved Elective, or Major course"
+    double_count: [ls, aae, eng-aae]
+    # only ENGRC 3350, 3500 and 3700 also fulfil liberal studies; the handbook says each
+    # of the others "does not fulfill a Liberal Studies requirement"
+    double_count_except:
+      ls: [ENGRC 3020, ENGRC 3023, ENGRC 3024, ENGRC 3025, ENGRC 3026, ENGRC 3027, ENGRC 3120, ENGRC 3152, ENGRC 3340, ENGRC 3341, ENGRC 3610, ENGRC 4152, ENGRC 4590, COMM 3020, COMM 3030]
+    notes: >-
+      Writing- or communication-intensive courses in the major also qualify. ENGRC 3152 and
+      4152 pair with CS 3152 and 4152; CS/INFO 5152 can't be taken with ENGRC 4152.
+
+  # the Fall 2020 - Spring 2024 policy: six courses, 18+ credits, three of seven groups,
+  # at most two Group 6, two at 2000+. The policy also accepts the A&S category codes of
+  # 2023-24 (CA-AS, LA-AS, HA-AS, SBA-AS, KCM-AS). The Fall 2023 handbook lists only
+  # Groups 1-6; the policy page's Group 7 (D-AG) only adds a way to count, so it's kept.
+  - id: ls
+    label: Liberal studies
+    kind: filter
+    filter:
+      attributes_any: [CA-AG, CA-HE, CA-AS, LA-AG, LA-AS, LAD-HE, ALC-AS, ALC-AAP, ALC-HA, SCD-AS, SCD-HA, HA-AG, HA-HE, HA-AS, HST-AS, KCM-AG, KCM-HE, KCM-AS, ETM-AS, ETM-HA, SBA-AG, SBA-HE, SBA-AS, SSC-AS, SSC-AAP, SSC-HA, GLC-AS, GLC-HA, FL-AG, CE-EN, D-AG]
+      min_credits: 3
+    count: 6
+    credits: 18
+    double_count: [eng-comm]
+    # "Courses which are assigned multiple liberal studies categories may only be applied
+    # towards one of those categories"
+    groups:
+      - {id: g1, label: "Group 1: cultural analysis, literature and the arts, social difference", attributes_any: [CA-AG, CA-HE, CA-AS, LA-AG, LA-AS, LAD-HE, ALC-AS, ALC-AAP, ALC-HA, SCD-AS, SCD-HA]}
+      - {id: g2, label: "Group 2: historical analysis", attributes_any: [HA-AG, HA-HE, HA-AS, HST-AS]}
+      - {id: g3, label: "Group 3: ethics, cognition and moral reasoning", attributes_any: [KCM-AG, KCM-HE, KCM-AS, ETM-AS, ETM-HA]}
+      - {id: g4, label: "Group 4: social science and global citizenship", attributes_any: [SBA-AG, SBA-HE, SBA-AS, SSC-AS, SSC-AAP, SSC-HA, GLC-AS, GLC-HA]}
+      - {id: g5, label: "Group 5: foreign languages", attributes_any: [FL-AG]}
+      - {id: g6, label: "Group 6: communications in engineering", attributes_any: [CE-EN], max_courses: 2}
+      - {id: g7, label: "Group 7: diversity", attributes_any: [D-AG]}
+    min_groups: 3
+    min_at_level: {2000: 2}
+    notes: >-
+      Six courses, 18+ credits, from at least three of the seven groups, at most two Group 6
+      courses, at least two at the 2000 level or higher. No Group 7 credit minimum (that
+      started with Fall 2024 entrants).
+
+  # handbook: "No course with a number <1100 can be applied toward graduation
+  # requirements", nor "pre-material" courses "such as CS 1109 or MATH 1110"; "ROTC
+  # courses at or above the 3000 level may be accepted as Advisor-approved Electives"
+  - id: eng-aae
+    label: Advisor-approved electives
+    kind: filter
+    filter:
+      min_level: 1100
+      exclude_subjects: [PE]
+      exclude: [MATH 1110, CS 1109]
+      min_level_for: {AIRS: 3000, MILS: 3000, NAVS: 3000}
+    count: 2
+    credits: 6
+    double_count: [eng-comm]
+    notes: Approved by the faculty advisor; courses below where the curriculum starts (MATH 1110, CS 1109) don't count.
+
+  - id: eng-pe
+    label: Physical education
+    kind: flag_only
+    count: 2
+    notes: Two semesters of PE (university requirement).
+
+  - id: eng-swim
+    label: Swim test
+    kind: flag_only
+    count: 1
+    notes: Demonstrate proficiency in swimming (university requirement).

@@ -504,3 +504,76 @@ def test_a_course_fills_the_specific_rule_before_a_catch_all():
     )
     st = statuses([place("ENGRI 1101")], program(elective, intro), cat)
     assert st["intro"].status == "done" and st["any"].status == "missing"
+
+
+# students who started before Fall 2024 ------------------------------------------------
+
+
+def test_a_fall_2023_arts_student_gets_the_2023_24_rules(roster, monkeypatch):
+    from app.config import get_settings
+    from app.requirements.loader import load_program, rules_year_for
+
+    monkeypatch.setattr(get_settings(), "data_dir", DATA.parent)  # the real rule files
+
+    assert rules_year_for("cs-as", "FA23") == "2023-24"
+    assert rules_year_for("cs-eng", "FA23") == "2023-24"
+    # nothing before Fall 2023 is encoded
+    assert rules_year_for("cs-eng", "FA22") is None
+    program = load_program("cs-as", "2023-24", DATA)
+    taken = [
+        ("FA23", "CS 1110"), ("FA23", "MATH 1110"), ("FA23", "MATH 1120"), ("FA23", "MATH 2210"),
+        ("SP24", "CS 2110"), ("SP24", "CS 2800"), ("FA24", "CS 3110"), ("SP25", "CS 3780"),
+        ("SP25", "CS 4820"), ("SP25", "STSCI 3080"), ("FA25", "CS 3410"), ("FA25", "CS 3700"),
+        ("FA25", "CS 4410"), ("FA25", "CS 4320"), ("SP26", "CS 4787"), ("SP26", "ASTRO 2211"),
+    ]  # fmt: skip
+    plan = [place(c, t, credits=roster.get(c).credits) for t, c in taken]
+    st = {r.id: r for r in audit(plan, program, roster).requirements}
+    # five-course core with no CS 3700/3780 slot, so this core is complete
+    assert st["core"].status == "done"
+    # STSCI 3080 is BTRY 3080's cross-listing: the probability course
+    assert st["probability"].status == "done"
+    # with three technical electives (STSCI 3080, CS 4787, ASTRO 2211), CS 3700 and CS
+    # 3780 fill the CS electives with CS 4320, as on the department's checklist
+    assert st["e4000"].status == "done" and st["tech"].status == "done"
+    assert st["math"].status == "done"
+
+
+def test_rule_files_reject_unknown_keys():
+    import pytest
+    from pydantic import ValidationError
+
+    # "label: MATH 1110, 1120" in an inline YAML map splits into a stray key
+    bad = {
+        "id": "m",
+        "label": "MATH 1110",
+        "kind": "courses",
+        "courses": ["MATH 1110"],
+        "1120": None,
+    }
+    with pytest.raises(ValidationError):
+        Requirement.model_validate(bad)
+
+
+def test_engineering_liberal_studies_before_fall_2024_has_no_group_7_minimum():
+    import yaml
+
+    rules = yaml.safe_load((DATA / "engineering" / "2023-24.yaml").read_text())
+    ls = Requirement.model_validate(next(r for r in rules["requirements"] if r["id"] == "ls"))
+    cat = Catalog(
+        [
+            course("HIST 2000", attributes=["HA-AG"]),
+            course("PHIL 2100", attributes=["ETM-AS"]),
+            course("ECON 1110", attributes=["SSC-AS"]),
+            course("PSYCH 1101", attributes=["SSC-AS"]),
+            course("ENGL 2000", attributes=["ALC-AS"]),
+            # Social Difference sits in Group 1 under this policy, not a group of its own
+            course("AAS 1100", attributes=["SCD-AS"]),
+        ]
+    )
+    plan = [
+        place(c)
+        for c in ("HIST 2000", "PHIL 2100", "ECON 1110", "PSYCH 1101", "ENGL 2000", "AAS 1100")
+    ]
+    # six courses from four groups, two at 2000+, and nothing from Group 7: enough here,
+    # though Fall 2024 entrants also need 3 credits of race and equity
+    assert statuses(plan, program(ls), cat)["ls"].status == "done"

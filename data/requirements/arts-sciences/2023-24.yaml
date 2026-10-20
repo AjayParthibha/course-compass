@@ -1,0 +1,16 @@
+# A&S college rules for Fall 2023 entrants. Only the writing seminars are modelled, as in
+# 2024-25. The CS checklist (Arts, Fall 2020 or later) also lists a foreign language
+# requirement, the A&S distribution (at least 8 courses covering all 10 categories) and
+# 120 credits with 100 from A&S courses; none of these is encoded yet.
+id: arts-sciences
+label: College of Arts & Sciences
+catalog_year: 2023-24
+source_url: https://as.cornell.edu/degree-requirements
+verified: false
+requirements:
+  - id: as-fws
+    label: First-year writing seminars
+    kind: filter
+    filter: {title_prefix: "FWS:"}
+    count: 2
+    seed: earliest

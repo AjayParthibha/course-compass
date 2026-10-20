@@ -8,7 +8,7 @@ import { termLabel } from '../../ui/terms'
 import { termIndex, termsAfter } from '../profile/settings'
 import CourseSearch, { type PickedCourse } from './CourseSearch'
 import GoalsStep from './GoalsStep'
-import { graduationTerms, olderRules, type Stage, stageOf, startingChoices } from './goals'
+import { catalogYear, graduationTerms, olderRules, type Stage, stageOf, startingChoices } from './goals'
 
 type Review = { courses: ParsedCourse[]; unread: string[]; skipped: string[] }
 
@@ -231,12 +231,14 @@ export default function OnboardingPage() {
       const result = await unwrap(
         api.POST('/api/onboarding/transcript', { body: { pdf_base64: await toBase64(file) } }),
       )
-      if (result.program && PROGRAMS.some((p) => p.id === result.program)) setProgram(result.program)
+      const detected = result.program && PROGRAMS.some((p) => p.id === result.program) ? result.program : program
+      setProgram(detected)
       const first = result.entering_term
-      if (first && options && !options.entering_terms.includes(first)) {
+      const since = options?.rule_years[detected]?.[0]
+      if (first && since && catalogYear(first) < since) {
         setError(
           `Your transcript starts in ${termLabel(first, true)}. CourseCompass only has degree rules for students ` +
-            `who started in ${termLabel(options.entering_terms[0], true)} or later, so it can’t plan for you yet.`,
+            `who started in Fall ${since.slice(0, 4)} or later, so it can’t plan for you yet.`,
         )
         return
       }
@@ -266,6 +268,10 @@ export default function OnboardingPage() {
   const current = options?.current_term
   const stage: Stage = current ? stageOf(entering, current) : 'continuing'
   const rules = olderRules(entering, options?.rule_years[program] ?? [])
+  // each program's rules start at its oldest catalog year; earlier starts can't be planned
+  const firstYear = options?.rule_years[program]?.[0]
+  const enteringTerms = (options?.entering_terms ?? []).filter((t) => !firstYear || catalogYear(t) >= firstYear)
+  const unsupported = !!options && !enteringTerms.includes(entering)
 
   // a new start term moves graduation out to a standard eight semesters if it was sooner
   const pickEntering = (term: string) => {
@@ -363,7 +369,7 @@ export default function OnboardingPage() {
               <label htmlFor="onboarding-entering" className="flex flex-col gap-1">
                 <span className="font-semibold">First semester at Cornell</span>
                 <select id="onboarding-entering" value={entering} onChange={(e) => pickEntering(e.target.value)} className="h-10 rounded-md border border-[#C3C9BC] bg-white px-2">
-                  {withTerm(options?.entering_terms ?? [], start.entering).map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
+                  {withTerm(enteringTerms, entering).map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
                 </select>
               </label>
               <label htmlFor="onboarding-graduating" className="flex flex-col gap-1">
@@ -373,6 +379,12 @@ export default function OnboardingPage() {
                 </select>
               </label>
             </div>
+            {unsupported && firstYear && (
+              <p role="alert" className="m-0 text-accent">
+                {PROGRAMS.find((p) => p.id === program)?.label} rules start with students who began in Fall{' '}
+                {firstYear.slice(0, 4)}, so CourseCompass can’t plan for a {termLabel(entering, true)} start yet.
+              </p>
+            )}
             <p className="m-0 text-[13px] text-muted">
               {rules
                 ? `There are no separate rules for students starting in ${termLabel(entering, true)} yet, so we check you against the current CS requirements (for students who started in Fall ${rules.slice(0, 4)} or later).`
@@ -388,7 +400,7 @@ export default function OnboardingPage() {
                 <Button
                   variant="primary"
                   className="h-11 self-end"
-                  disabled={!current}
+                  disabled={!current || unsupported}
                   onClick={() => {
                     setPending([])
                     setStep(2)
@@ -457,7 +469,7 @@ export default function OnboardingPage() {
                   />
                 </label>
                 {error && <p role="alert" className="m-0 text-accent">{error}</p>}
-                <Button variant="primary" className="h-11 self-end" disabled={busy || !text.trim()} onClick={read}>
+                <Button variant="primary" className="h-11 self-end" disabled={busy || !text.trim() || unsupported} onClick={read}>
                   Read my courses
                 </Button>
               </>
