@@ -21,9 +21,29 @@ const toBase64 = (file: File) =>
   })
 
 const PROGRAMS = [
-  { id: 'cs-eng', label: 'Engineering (B.S.)' },
-  { id: 'cs-as', label: 'Arts & Sciences (B.A.)' },
+  { id: 'cs-eng', label: 'Engineering (B.S.)', name: 'Engineering', detail: 'Computer Science B.S. · College of Engineering' },
+  { id: 'cs-as', label: 'Arts & Sciences (B.A.)', name: 'Arts & Sciences', detail: 'Computer Science B.A. · College of Arts & Sciences' },
 ]
+
+const select =
+  'h-11 w-full appearance-none rounded-lg border border-[#C3C9BC] bg-white pr-9 pl-3 text-[15px] hover:border-line-strong'
+
+/** A native select with the app's chevron (the browser's own differs on every platform). */
+function TermSelect({ id, label, value, terms, onChange }: { id: string; label: string; value: string; terms: string[]; onChange: (t: string) => void }) {
+  return (
+    <label htmlFor={id} className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-[13.5px] font-semibold">{label}</span>
+      <span className="relative">
+        <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={select}>
+          {terms.map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
+        </select>
+        <svg aria-hidden="true" viewBox="0 0 16 16" className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-muted">
+          <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+    </label>
+  )
+}
 const PLACEHOLDER = `AP Computer Science A  5
 FA24  CS 1110 / MATH 1910 / CHEM 2090 / FWS
 SP25  CS 211x, MATH 1920, PHYS 1112
@@ -320,6 +340,7 @@ export default function OnboardingPage() {
   const none = !parsed || parsed.courses.length === 0
   const thisTerm = parsed?.courses.filter((c) => c.term === entering) ?? []
   const matched = parsed?.courses.filter((c) => c.code).length ?? 0
+  const semesters = termIndex(graduating) - termIndex(entering) + 1
   // every term from the first one to now, so a missing course can be added to an empty term
   const history = current && stage !== 'incoming' ? [entering, ...termsAfter(entering, current, 20)] : []
   const terms = [
@@ -341,7 +362,7 @@ export default function OnboardingPage() {
         <span className="text-[17px] font-extrabold tracking-tight">CourseCompass</span>
         <span className="text-muted max-sm:hidden">Setting up your plan · takes about 5 minutes</span>
         <span className="flex-1" />
-        {me?.code && <span className="font-mono text-[13px] text-muted">{me.code}</span>}
+        {me?.code && <span className="font-mono text-[13px] text-muted max-sm:hidden">{me.code}</span>}
         <Button variant="quiet" onClick={signOut}>
           Sign out
         </Button>
@@ -351,40 +372,63 @@ export default function OnboardingPage() {
 
         {step === 0 && (
           <section className="flex flex-col gap-5 rounded-xl border border-line bg-white p-5">
-            <fieldset className="m-0 flex flex-wrap gap-3 border-0 p-0">
-              <legend className="mb-2 font-semibold">Your program</legend>
-              {PROGRAMS.map((p) => (
-                <label
-                  key={p.id}
-                  htmlFor={`program-${p.id}`}
-                  className={`flex h-10 items-center gap-2 rounded-md border px-3 ${program === p.id ? 'border-ink' : 'border-line'}`}
-                >
-                  <input
-                    id={`program-${p.id}`}
-                    type="radio"
-                    name="program"
-                    value={p.id}
-                    aria-label={p.label}
-                    checked={program === p.id}
-                    onChange={() => setProgram(p.id)}
-                  />
-                  {p.label}
-                </label>
-              ))}
+            <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+              <legend className="mb-2 p-0 text-[13.5px] font-semibold">Your program</legend>
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {PROGRAMS.map((p) => {
+                  const on = program === p.id
+                  return (
+                    <label
+                      key={p.id}
+                      htmlFor={`program-${p.id}`}
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink ${
+                        on ? 'border-ink bg-chip/60 shadow-[inset_0_0_0_1px_var(--color-ink)]' : 'border-line bg-white hover:border-line-strong'
+                      }`}
+                    >
+                      <input
+                        id={`program-${p.id}`}
+                        type="radio"
+                        name="program"
+                        value={p.id}
+                        aria-label={p.label}
+                        checked={on}
+                        onChange={() => setProgram(p.id)}
+                        className="sr-only"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className={`mt-0.5 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full border-[1.5px] ${on ? 'border-ink' : 'border-line-strong'}`}
+                      >
+                        {on && <span className="h-2 w-2 rounded-full bg-ink" />}
+                      </span>
+                      <span className="flex min-w-0 flex-col">
+                        <span className="font-semibold">{p.name}</span>
+                        <span className="text-[13px] text-muted">{p.detail}</span>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
             </fieldset>
-            <div className="flex flex-wrap gap-6">
-              <label htmlFor="onboarding-entering" className="flex flex-col gap-1">
-                <span className="font-semibold">First semester at Cornell</span>
-                <select id="onboarding-entering" value={entering} onChange={(e) => pickEntering(e.target.value)} className="h-10 rounded-md border border-[#C3C9BC] bg-white px-2">
-                  {withTerm(enteringTerms, entering).map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
-                </select>
-              </label>
-              <label htmlFor="onboarding-graduating" className="flex flex-col gap-1">
-                <span className="font-semibold">Expected graduation</span>
-                <select id="onboarding-graduating" value={graduating} onChange={(e) => setGraduating(e.target.value)} className="h-10 rounded-md border border-[#C3C9BC] bg-white px-2">
-                  {withTerm(current ? graduationTerms(entering, current) : [], graduating).map((t) => <option key={t} value={t}>{termLabel(t, true)}</option>)}
-                </select>
-              </label>
+            <div className="flex flex-col gap-2">
+              <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                <TermSelect id="onboarding-entering" label="First semester at Cornell" value={entering} terms={withTerm(enteringTerms, entering)} onChange={pickEntering} />
+                <TermSelect
+                  id="onboarding-graduating"
+                  label="Expected graduation"
+                  value={graduating}
+                  terms={withTerm(current ? graduationTerms(entering, current) : [], graduating)}
+                  onChange={setGraduating}
+                />
+              </div>
+              <p className="m-0 text-[13px] text-muted">
+                <span className="font-semibold text-ink-soft">
+                  {semesters} {semesters === 1 ? 'semester' : 'semesters'}
+                </span>
+                , {termLabel(entering, true)} to {termLabel(graduating, true)}. {rules
+                  ? `There are no separate rules for a ${termLabel(entering, true)} start yet, so you’re checked against the current CS requirements (for students who started in Fall ${rules.slice(0, 4)} or later).`
+                  : 'Your first semester decides which year’s degree requirements apply.'}
+              </p>
             </div>
             {unsupported && firstYear && (
               <p role="alert" className="m-0 text-accent">
@@ -392,11 +436,6 @@ export default function OnboardingPage() {
                 {firstYear.slice(0, 4)}, so CourseCompass can’t plan for a {termLabel(entering, true)} start yet.
               </p>
             )}
-            <p className="m-0 text-[13px] text-muted">
-              {rules
-                ? `There are no separate rules for students starting in ${termLabel(entering, true)} yet, so we check you against the current CS requirements (for students who started in Fall ${rules.slice(0, 4)} or later).`
-                : 'We check you against the CS requirements for your entering year, not this year’s.'}
-            </p>
             {stage === 'incoming' ? (
               <>
                 <p className="m-0 max-w-2xl">
