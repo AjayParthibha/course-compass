@@ -1,8 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
+import { api, unwrap } from '../../api/client'
 import { keys, useLatestConversation } from '../../api/hooks'
 import { streamChat } from '../../api/sse'
-import type { AdvisorEvent } from '../../api/types'
+import type { AdvisorEvent, Conversation } from '../../api/types'
 import { useAdvisor, type Turn } from './store'
 
 let nextId = 0
@@ -12,17 +13,30 @@ export function useChat() {
   const qc = useQueryClient()
   const history = useLatestConversation()
 
+  // history carries each proposal's current status; seed the cache the cards read from
+  const show = useCallback(
+    (convo: Conversation) => {
+      for (const m of convo.messages)
+        for (const e of m.events) if (e.type === 'proposal') qc.setQueryData(keys.proposal(e.proposal.id), e.proposal)
+      useAdvisor
+        .getState()
+        .showChat(convo.id, convo.messages.map((m) => ({ id: turnId(), role: m.role, events: m.events as AdvisorEvent[] })))
+    },
+    [qc],
+  )
+
+  // the latest chat comes back on a new visit, unless one is already on screen (including a new one)
   useEffect(() => {
     const convo = history.data
-    if (!convo || useAdvisor.getState().turns.length) return
-    // history carries each proposal's current status; seed the cache the cards read from
-    for (const m of convo.messages)
-      for (const e of m.events) if (e.type === 'proposal') qc.setQueryData(keys.proposal(e.proposal.id), e.proposal)
-    useAdvisor.setState({
-      conversationId: convo.id,
-      turns: convo.messages.map((m) => ({ id: turnId(), role: m.role, events: m.events as AdvisorEvent[] })),
-    })
-  }, [history.data, qc])
+    if (!convo || useAdvisor.getState().loaded) return
+    show(convo)
+  }, [history.data, show])
+
+  /** open an earlier chat; asking there continues it */
+  const open = async (id: number) => {
+    if (useAdvisor.getState().streaming) return
+    show(await unwrap(api.GET('/api/chat/{conversation_id}', { params: { path: { conversation_id: id } } })))
+  }
 
   const send = async (text: string) => {
     const { streaming, conversationId, turns } = useAdvisor.getState()
@@ -40,7 +54,9 @@ export function useChat() {
     try {
       for await (const event of streamChat(text.trim(), conversationId)) {
         if (event.type === 'done') {
-          useAdvisor.setState({ conversationId: event.conversation_id })
+          useAdvisor.setState({ conversationId: event.conversation_id, loaded: true })
+          // a new chat now has a title; an old one moves to the top of the list
+          qc.invalidateQueries({ queryKey: keys.chats })
           continue
         }
         push(event)
@@ -59,5 +75,5 @@ export function useChat() {
     }
   }
 
-  return { send }
+  return { send, open }
 }

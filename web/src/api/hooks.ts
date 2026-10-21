@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
+import { useAdvisor } from '../features/advisor/store'
 import { api, auth, unwrap } from './client'
 import type { PlanOp, PlanSettingsUpdate, PlanState } from './types'
 
@@ -15,6 +16,7 @@ export const keys = {
   // under 'candidates' so whatever refreshes the lists refreshes the areas too
   areas: (slot: string, term: string, placement: string | null) => ['candidates', 'areas', slot, term, placement] as const,
   conversation: ['conversation', 'latest'] as const,
+  chats: ['conversation', 'list'] as const,
 }
 
 /** Forget this browser's session and cached data, then go to the login page. */
@@ -24,6 +26,8 @@ export function useSignOut() {
   return () => {
     auth.clear()
     qc.clear()
+    // the next person to sign in mustn't see this chat
+    useAdvisor.setState({ conversationId: null, turns: [], draft: '', loaded: false })
     navigate('/login')
   }
 }
@@ -192,6 +196,15 @@ export function useOnboardingOptions() {
     queryKey: ['onboarding', 'options'],
     queryFn: () => unwrap(api.GET('/api/onboarding/options')),
     staleTime: Infinity,
+  })
+}
+
+/** Past advisor chats, most recently active first. */
+export function useChats(enabled = true) {
+  return useQuery({
+    queryKey: keys.chats,
+    queryFn: () => unwrap(api.GET('/api/chat')),
+    enabled,
   })
 }
 

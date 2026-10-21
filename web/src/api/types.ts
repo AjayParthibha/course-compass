@@ -22,6 +22,7 @@ export type SlotAreas = S['SlotAreas']
 export type Area = S['Area']
 export type BlockedCourse = S['BlockedCourse']
 export type Conversation = S['Conversation']
+export type ConversationSummary = S['ConversationSummary']
 export type ChatMessage = S['ChatMessage']
 
 export type PlanSettingsUpdate = S['PlanSettingsUpdate']

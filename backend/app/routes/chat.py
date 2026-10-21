@@ -7,7 +7,7 @@ from app import models, services
 from app.advisor.loop import run_turn
 from app.models import SessionLocal
 from app.routes.auth import DB, CurrentStudent
-from app.schemas.advisor import ChatMessage, ChatRequest, Conversation
+from app.schemas.advisor import ChatMessage, ChatRequest, Conversation, ConversationSummary
 
 router = APIRouter(prefix="/chat", tags=["advisor"])
 
@@ -25,6 +25,33 @@ async def chat(body: ChatRequest, student: CurrentStudent):
                 yield f"data: {event.model_dump_json()}\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+@router.get("")
+def list_conversations(
+    db: DB, student: CurrentStudent, limit: int = 30
+) -> list[ConversationSummary]:
+    """The student's chats with at least one question, most recently active first."""
+    convos = db.scalars(
+        select(models.Conversation).where(models.Conversation.student_id == student.id)
+    ).all()
+    out = []
+    for convo in convos:
+        asked = [m for m in convo.messages if m.role == "user" and m.events]
+        if not asked:
+            continue
+        first = "".join(e.get("delta", "") for e in asked[0].events if e.get("type") == "text")
+        title = " ".join(first.split())
+        out.append(
+            ConversationSummary(
+                id=convo.id,
+                title=title if len(title) <= 80 else title[:79].rstrip() + "…",
+                last_at=convo.messages[-1].created_at,
+                questions=len(asked),
+            )
+        )
+    out.sort(key=lambda c: c.last_at, reverse=True)
+    return out[:limit]
 
 
 @router.get("/latest")

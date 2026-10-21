@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router'
 import { useMe, usePlan } from '../../api/hooks'
 import { usePlanUI } from '../plan/store'
+import ChatMenu from './ChatMenu'
 import Message from './Message'
 import { proposalQuery } from './proposalQuery'
 import { latestProposalId } from './proposalState'
@@ -20,7 +21,7 @@ type Props = {
 
 export default function AdvisorPanel({ variant, onClose, focusInput = false }: Props) {
   const { turns, streaming, draft, setDraft } = useAdvisor()
-  const { send } = useChat()
+  const { send, open } = useChat()
   const scroller = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const events = useMemo(() => turns.flatMap((t) => t.events), [turns])
@@ -60,7 +61,7 @@ export default function AdvisorPanel({ variant, onClose, focusInput = false }: P
       id="advisor-panel"
       className="flex h-full min-h-0 flex-col overflow-hidden bg-paper"
     >
-      <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
+      <div className="relative flex items-start justify-between gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0">
           <h2 className="m-0 text-[16px] font-extrabold">Advisor</h2>
           <p className="m-0 text-[12.5px] text-muted">Checks every change with the planner before suggesting it</p>
@@ -68,6 +69,8 @@ export default function AdvisorPanel({ variant, onClose, focusInput = false }: P
             What it knows
           </Link>
         </div>
+        <div className="-mr-1.5 flex shrink-0 items-center">
+        <ChatMenu onOpen={open} />
         <button
           type="button"
           onClick={onClose}
@@ -75,7 +78,7 @@ export default function AdvisorPanel({ variant, onClose, focusInput = false }: P
           aria-expanded={true}
           aria-controls="advisor-panel"
           title={variant === 'side' ? 'Collapse' : 'Close'}
-          className="-mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border-0 bg-transparent text-muted hover:bg-chip hover:text-ink"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border-0 bg-transparent text-muted hover:bg-chip hover:text-ink"
         >
           {variant === 'side' ? (
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
@@ -88,6 +91,7 @@ export default function AdvisorPanel({ variant, onClose, focusInput = false }: P
             </svg>
           )}
         </button>
+        </div>
       </div>
 
       <div ref={scroller} className="flex flex-1 flex-col gap-5 overflow-y-auto px-4 py-4">

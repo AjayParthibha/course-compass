@@ -533,7 +533,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Conversations
+         * @description The student's chats with at least one question, most recently active first.
+         */
+        get: operations["list_conversations_api_chat_get"];
         put?: never;
         /**
          * Chat
@@ -788,6 +792,23 @@ export interface components {
             id: number;
             /** Messages */
             messages: components["schemas"]["ChatMessage"][];
+        };
+        /**
+         * ConversationSummary
+         * @description One past chat in the history list.
+         */
+        ConversationSummary: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /**
+             * Last At
+             * Format: date-time
+             */
+            last_at: string;
+            /** Questions */
+            questions: number;
         };
         /** Course */
         Course: {
@@ -2872,6 +2893,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Course"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_conversations_api_chat_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummary"][];
                 };
             };
             /** @description Validation Error */

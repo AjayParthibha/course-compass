@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import Field
@@ -81,3 +82,12 @@ class ChatMessage(Schema):
 class Conversation(Schema):
     id: int
     messages: list[ChatMessage]
+
+
+class ConversationSummary(Schema):
+    """One past chat in the history list."""
+
+    id: int
+    title: str  # the first question, shortened
+    last_at: datetime
+    questions: int

@@ -739,3 +739,31 @@ def test_specialization_areas_follow_interests(client, auth, catalog, monkeypatc
         headers=auth,
     )
     assert areas()[0] == ("ECON", ["Economics, which you're interested in"])
+
+
+def test_past_chats_are_listed_newest_first(client, auth):
+    from app import models
+    from app.models import SessionLocal, now
+
+    onboard(client, auth)
+    me = client.get("/api/auth/me", headers=auth).json()
+    with SessionLocal() as db:
+        for question in ["Make Fall ’27 lighter", "What's left before I graduate?"]:
+            convo = models.Conversation(student_id=me["id"])
+            db.add(convo)
+            db.flush()
+            db.add(
+                models.Message(
+                    conversation_id=convo.id,
+                    role="user",
+                    content=[{"role": "user", "content": question}],
+                    events=[{"type": "text", "delta": question}],
+                    created_at=now(),
+                )
+            )
+        db.add(models.Conversation(student_id=me["id"]))  # never used: left out
+        db.commit()
+    chats = client.get("/api/chat", headers=auth).json()
+    titles = [c["title"] for c in chats]
+    assert titles == ["What's left before I graduate?", "Make Fall ’27 lighter"]
+    assert all(c["questions"] == 1 for c in chats)
