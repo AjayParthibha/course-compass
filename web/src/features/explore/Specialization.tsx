@@ -2,10 +2,11 @@ import { useId, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useAreas, useCandidates, useSetApproval } from '../../api/hooks'
 import type { Area, Candidate, PlanState, SlotAreas, SlotCandidates } from '../../api/types'
-import { Button } from '../../ui'
+import { Button, Tag } from '../../ui'
 import { cureviewsUrl } from '../../ui/links'
 import { termLabel } from '../../ui/terms'
 import { useAdvisor } from '../advisor/store'
+import { areaHint, basisLabel } from './reasons'
 
 type CourseSummary = Candidate['course']
 
@@ -164,7 +165,7 @@ function AreaList({ areas, term, onPick }: { areas: SlotAreas; term: string; onP
           />
         </div>
       </div>
-      {!q && <p className="m-0 text-[13px] text-muted">Areas that build on your plan come first.</p>}
+      {!q && <p className="m-0 text-[13px] text-muted">{areaHint(areas.areas)}</p>}
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {shown.map((a) => (
           <li key={a.subject}>
@@ -183,6 +184,12 @@ function AreaList({ areas, term, onPick }: { areas: SlotAreas; term: string; onP
                     <span className="rounded-full bg-ink px-2 py-px text-[11px] font-semibold text-paper">In your plan</span>
                   )}
                 </span>
+                {a.reasons.map((r) => (
+                  <span key={r.text} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[13px]">
+                    <span>{r.text}</span>
+                    <Tag kind={basisLabel(r).kind}>{basisLabel(r).text}</Tag>
+                  </span>
+                ))}
                 <span className="text-[13px] text-muted">{why(a, term)}</span>
                 {a.sample.length > 0 && (
                   <span className="truncate font-mono text-[12px] text-faint">{a.sample.map((c) => c.code).join(' · ')}</span>

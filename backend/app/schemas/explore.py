@@ -90,6 +90,8 @@ class Area(Schema):
     builds_on: list[str] = []  # courses in your plan under this subject
     counted: list[str] = []  # courses already counting toward the rule here
     sample: list[CourseSummary] = []
+    # why the area fits what the student told us ("3 courses about machine learning")
+    reasons: list[Reason] = []
 
 
 class SlotAreas(Schema):

@@ -69,7 +69,10 @@ def best_subject(options: list[tuple[Placement, Course]], req: Requirement):
 
 
 def matches_filter(course: Course, f: CourseFilter, catalog: Catalog | None = None) -> bool:
-    if course.subject in f.exclude_subjects or course.code in f.exclude:
+    # a course named in `exclude` stays out under every code it's listed as: LING 4474 is
+    # also COGST 4740, and the checklist bars the course, not one of its numbers
+    codes = {course.code, *course.cross_listed}
+    if course.subject in f.exclude_subjects or codes & set(f.exclude):
         return False
     if course.level < f.min_level_for.get(course.subject, 0):
         return False

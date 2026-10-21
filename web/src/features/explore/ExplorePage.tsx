@@ -6,6 +6,7 @@ import { Button, SectionLabel, Tag } from '../../ui'
 import { cureviewsUrl } from '../../ui/links'
 import { termLabel } from '../../ui/terms'
 import { useNotForMe } from './notForMe'
+import { basisLabel } from './reasons'
 import SlotIndex from './SlotIndex'
 import Specialization, { Approval } from './Specialization'
 import { openSlots, slotHref } from './slots'
@@ -15,9 +16,8 @@ type CourseSummary = Candidate['course']
 const touch = 'max-sm:h-11'
 
 const basisTag = (r: Candidate['reasons'][number]) => {
-  if (r.basis === 'stated') return <Tag kind="said">You said{r.date ? ` · ${r.date}` : ''}</Tag>
-  if (r.basis === 'plan') return <Tag kind="plan">Your plan</Tag>
-  return <Tag kind="guess">My guess · not confirmed</Tag>
+  const { kind, text } = basisLabel(r)
+  return <Tag kind={kind}>{text}</Tag>
 }
 
 type CardProps = { c: Candidate; term: string; canPick: boolean; onPick: () => void; onHide: () => void }

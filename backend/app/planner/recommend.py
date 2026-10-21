@@ -224,6 +224,69 @@ def standard_courses(program: Program) -> set[str]:
     return {c for r in program.all_requirements() if r.kind == "courses" for c in r.courses}
 
 
+# the external specialization takes three courses from one subject, so an area is
+# judged by its best three: one matching course in a big department shouldn't outrank
+# a department built around the interest
+AREA_COURSES = 3
+
+
+@dataclass
+class AreaFit:
+    score: float = 0.0
+    reasons: list[Reason] = field(default_factory=list)
+    # the area's courses that match an interest, in the order given; `count` is how many
+    # could count toward the rule (cross-listing caps applied), for breaking ties
+    matches: list[Course] = field(default_factory=list)
+    count: int = 0
+
+
+def rank_areas(
+    areas: dict[str, list[Course]],
+    facts: list[ProfileFact],
+    catalog: Catalog,
+    caps: dict[str, int] | None = None,
+) -> dict[str, AreaFit]:
+    """How well each subject a same-subject rule could come from fits the student's
+    interests. Only titles count here (a description match is too weak to pick a
+    department by). A free-text interest that names the subject ("linguistics" for
+    LING) makes every course in it a match. `caps` is the rule's cross-listing limits
+    ({CS: 1}): two ORIE courses cross-listed with CS are one usable match, not two."""
+    interests = [f for f in facts if f.status in WEIGHT and f.dimension == "interest"]
+    out: dict[str, AreaFit] = {}
+    for subject, courses in areas.items():
+        fit = AreaFit()
+        name = catalog.subject_name(subject)
+        matched: set[str] = set()
+        for f in interests:
+            phrase, words = INTERESTS.get(f.value, (f.value, [f.value]))
+            weight = WEIGHT[f.status]
+            if f.value not in INTERESTS and _has(name, words):
+                hits = courses
+                text = f"{name}, which you're interested in"
+            else:
+                hits = [c for c in courses if _has(c.title, words)]
+                n = _usable(hits, caps or {})
+                noun = "course" if n == 1 else "courses"
+                text = f"{n} {noun} about {phrase}, which you're interested in"
+            n = _usable(hits, caps or {})
+            if not n:
+                continue
+            fit.score += TITLE * weight * min(n, AREA_COURSES)
+            fit.reasons.append(_said(f, text))
+            matched |= {c.code for c in hits}
+        fit.matches = [c for c in courses if c.code in matched]
+        fit.count = _usable(fit.matches, caps or {})
+        out[subject] = fit
+    return out
+
+
+def _usable(courses: list[Course], caps: dict[str, int]) -> int:
+    """How many of `courses` could count together under the rule's cross-listing caps."""
+    capped = {s: sum(any(x.split()[0] == s for x in c.cross_listed) for c in courses) for s in caps}
+    over = sum(max(0, n - caps[s]) for s, n in capped.items())
+    return len(courses) - over
+
+
 def _interest(r: Ranked, f: ProfileFact, catalog: Catalog) -> None:
     """Points for a course that's about something the student is interested in: one of
     onboarding's choices by its phrases, or free text ("economics") by the phrase itself

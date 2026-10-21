@@ -7,7 +7,7 @@ from app.catalog.store import get_catalog
 from app.models import now
 from app.planner.audit import audit, cross_listed_with, needed, subjects_of
 from app.planner.eligible import by_offering, courses_by_subject, list_eligible, listed_under
-from app.planner.recommend import rank, standard_courses
+from app.planner.recommend import rank, rank_areas, standard_courses
 from app.routes.auth import DB, CurrentStudent
 from app.schemas.courses import Course
 from app.schemas.explore import (
@@ -82,13 +82,21 @@ def areas(
 ) -> SlotAreas:
     """Subjects a same-subject rule (the external specialization) could be filled from,
     best fit first: the one the plan already uses, then ones with courses ready to take,
-    then ones that build on courses in the plan."""
+    then ones that match the student's interests (with the reasons), then ones that
+    build on courses in the plan."""
     program, req, plan = _slot(slot_id, term, db, student)
     catalog = get_catalog()
     counted = counted_toward(req, plan.placements, program, placement)
     counted_courses = [c for p in counted if (c := catalog.get(p.course))]
     chosen = shared_subject(req, counted_courses)
     groups = courses_by_subject(req, term, plan.placements, catalog)
+    facts = [services.fact_schema(f) for f in services.visible_facts(db, student)]
+    interest = rank_areas(
+        {s: g.ready + [c for c, _ in g.blocked] for s, g in groups.items()},
+        facts,
+        catalog,
+        req.max_cross_listed,
+    )
 
     out: list[Area] = []
     fit: dict[str, int] = {}
@@ -111,7 +119,8 @@ def areas(
                 blocked=len(group.blocked),
                 builds_on=[c.code for c in builds_on],
                 counted=here,
-                sample=[c.summary() for c in group.ready[:3]],
+                sample=[c.summary() for c in _sample(group.ready, interest[subject])],
+                reasons=interest[subject].reasons,
             )
         )
     out.sort(
@@ -119,6 +128,8 @@ def areas(
             a.subject != chosen,
             -len(a.counted),
             a.ready == 0,
+            -interest[a.subject].score,
+            -interest[a.subject].count,
             -fit[a.subject],
             -a.ready,
             a.subject,
@@ -234,6 +245,13 @@ def candidates(
         blocked=blocked,
         approval=approval_state(req, student),
     )
+
+
+def _sample(ready: list[Course], fit, n: int = 3) -> list[Course]:
+    """The courses shown under an area: ones that match an interest first, then the
+    rest of what's ready, in order."""
+    matched = {c.code for c in fit.matches}
+    return sorted(ready, key=lambda c: c.code not in matched)[:n]
 
 
 def approval_state(req: Requirement, student: models.Student) -> ApprovalState | None:

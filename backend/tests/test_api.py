@@ -3,6 +3,7 @@ import json
 import pytest
 
 from app.planner.ops import OpError
+from app.schemas.courses import Course
 
 HISTORY = """FA24 CS 1110 / MATH 1910
 SP25 CS 2110, CS 2800
@@ -685,3 +686,56 @@ def test_ranking_leaves_hidden_courses_hidden(client, auth):
     res = client.get("/api/slots/e4000/candidates", params={"term": "FA27"}, headers=auth).json()
     assert [c["course"]["code"] for c in res["candidates"]] == ["CS 4740"]
     assert [h["course"]["code"] for h in res["hidden"]] == ["CS 4780"]
+
+
+def test_specialization_areas_follow_interests(client, auth, catalog, monkeypatch):
+    def add(code, title):
+        subject, number = code.split()
+        monkeypatch.setitem(
+            catalog.courses,
+            code,
+            Course(
+                code=code,
+                subject=subject,
+                number=number,
+                title=title,
+                credits_min=3,
+                credits_max=3,
+                terms_offered=["FA25", "SP26", "FA26"],
+                typical_seasons=["FA", "SP"],
+            ),
+        )
+
+    for code, title in [
+        ("ECON 3010", "Econometrics"),
+        ("ECON 3030", "Intermediate Microeconomics"),
+        ("ECON 3110", "Probability Models"),
+        ("ORIE 4740", "Statistical Learning"),
+        ("ORIE 4741", "Machine Learning with Big Messy Data"),
+    ]:
+        add(code, title)
+    monkeypatch.setitem(catalog.subject_names, "ECON", "Economics")
+    onboard(client, auth)
+
+    def areas():
+        res = client.get("/api/slots/ext/areas", params={"term": "SP27"}, headers=auth).json()
+        return [(a["subject"], [r["text"] for r in a["reasons"]]) for a in res["areas"]]
+
+    # nothing said: more courses ready to take first
+    assert areas() == [("ECON", []), ("ORIE", [])]
+    ml = client.post(
+        "/api/profile/facts",
+        json={"dimension": "interest", "value": "ml", "text": "Interested in machine learning"},
+        headers=auth,
+    ).json()
+    assert areas() == [
+        ("ORIE", ["2 courses about machine learning, which you're interested in"]),
+        ("ECON", []),
+    ]
+    client.patch(f"/api/profile/facts/{ml['id']}", json={"status": "rejected"}, headers=auth)
+    client.post(
+        "/api/profile/facts",
+        json={"dimension": "interest", "value": "economics", "text": "Interested in economics"},
+        headers=auth,
+    )
+    assert areas()[0] == ("ECON", ["Economics, which you're interested in"])

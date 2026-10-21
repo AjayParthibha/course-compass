@@ -430,7 +430,8 @@ export interface paths {
          * Areas
          * @description Subjects a same-subject rule (the external specialization) could be filled from,
          *     best fit first: the one the plan already uses, then ones with courses ready to take,
-         *     then ones that build on courses in the plan.
+         *     then ones that match the student's interests (with the reasons), then ones that
+         *     build on courses in the plan.
          */
         get: operations["areas_api_slots__slot_id__areas_get"];
         put?: never;
@@ -698,6 +699,11 @@ export interface components {
              * @default []
              */
             sample: components["schemas"]["CourseSummary"][];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: components["schemas"]["Reason"][];
         };
         /** AuditResult */
         AuditResult: {

@@ -8,7 +8,7 @@ import pytest
 
 from app.catalog.store import Catalog
 from app.planner.eligible import list_eligible
-from app.planner.recommend import rank, standard_courses
+from app.planner.recommend import rank, rank_areas, standard_courses
 from app.requirements.loader import load_program
 from app.schemas.courses import AllOf, Course, CourseReq
 from app.schemas.plans import Placement
@@ -216,3 +216,89 @@ def test_the_real_roster_puts_ml_courses_first_for_an_ml_student():
     assert all(r.reasons and r.reasons[0].text.startswith("About machine learning") for r in top)
     # the core in the plan (CS 3110, CS 2800) isn't offered as a reason
     assert not any(r.basis == "plan" for c in ranking.courses for r in c.reasons)
+
+
+# areas for a same-subject rule ---------------------------------------------------------
+
+AREAS = {
+    "ORIE": [
+        course("ORIE 3300", "Optimization I"),
+        course("ORIE 4740", "Statistical Learning"),
+        course("ORIE 4741", "Machine Learning with Big Messy Data"),
+    ],
+    "ECON": [
+        course("ECON 3030", "Intermediate Microeconomics"),
+        course("ECON 3110", "Probability"),
+    ],
+    "PSYCH": [course("PSYCH 3050", "Machine Learning and the Mind")],
+}
+AREA_CAT = Catalog(
+    [c for cs in AREAS.values() for c in cs],
+    subject_names={"ORIE": "Operations Research", "ECON": "Economics", "PSYCH": "Psychology"},
+)
+
+
+def test_areas_score_by_matching_titles_up_to_three():
+    fits = rank_areas(AREAS, [fact("interest", "ml")], AREA_CAT)
+    assert fits["ORIE"].score > fits["PSYCH"].score > 0 == fits["ECON"].score
+    assert (
+        fits["ORIE"].reasons[0].text
+        == "2 courses about machine learning, which you're interested in"
+    )
+    assert (
+        fits["PSYCH"].reasons[0].text
+        == "1 course about machine learning, which you're interested in"
+    )
+    assert fits["ORIE"].reasons[0].basis == "stated"
+
+
+def test_a_subject_named_by_an_interest_fits_as_a_whole():
+    fits = rank_areas(AREAS, [fact("interest", "economics")], AREA_CAT)
+    assert fits["ECON"].score > 0 and fits["ORIE"].score == 0
+    assert fits["ECON"].reasons[0].text == "Economics, which you're interested in"
+
+
+def test_areas_ignore_descriptions_and_unsettled_facts():
+    vague = {
+        "ECON": [
+            course("ECON 3030", "Micro", description="machine learning and AI, neural networks")
+        ]
+    }
+    assert rank_areas(vague, [fact("interest", "ml")], AREA_CAT)["ECON"].score == 0
+    assert (
+        rank_areas(AREAS, [fact("interest", "ml", status="rejected")], AREA_CAT)["ORIE"].score == 0
+    )
+
+
+def test_cross_listed_matches_count_once_under_a_cap():
+    capped = {
+        "ORIE": [
+            course("ORIE 5750", "Applied Machine Learning").model_copy(
+                update={"cross_listed": ["CS 5785"]}
+            ),
+            course("ORIE 5751", "Causal Inference using Machine Learning").model_copy(
+                update={"cross_listed": ["CS 5726"]}
+            ),
+        ]
+    }
+    fit = rank_areas(capped, [fact("interest", "ml")], AREA_CAT, {"CS": 1})["ORIE"]
+    assert fit.count == 1
+    assert fit.reasons[0].text == "1 course about machine learning, which you're interested in"
+    assert rank_areas(capped, [fact("interest", "ml")], AREA_CAT)["ORIE"].count == 2
+
+
+def test_more_matches_break_a_tie_at_three():
+    many = {
+        "ORIE": [course(f"ORIE 47{i}0", "Machine Learning") for i in range(5)],
+        "PSYCH": [course(f"PSYCH 47{i}0", "Machine Learning") for i in range(3)],
+    }
+    fits = rank_areas(many, [fact("interest", "ml")], AREA_CAT)
+    assert fits["ORIE"].score == fits["PSYCH"].score  # both have the three the rule needs
+    assert fits["ORIE"].count > fits["PSYCH"].count
+
+
+def test_naming_a_department_makes_every_course_in_it_a_match():
+    fits = rank_areas(
+        AREAS, [fact("interest", "economics"), fact("interest", "ml", fid=2)], AREA_CAT
+    )
+    assert fits["ECON"].count == 2 and fits["ECON"].score == fits["ORIE"].score

@@ -2,7 +2,7 @@
 with CS, no independent study."""
 
 from app.catalog.store import Catalog
-from app.planner.audit import audit
+from app.planner.audit import audit, matches
 from app.planner.eligible import courses_by_subject, listed_under
 from app.planner.solver import check_plan
 from app.schemas.courses import Course, CourseReq
@@ -168,3 +168,15 @@ def test_an_advisor_approved_mix_counts():
     assert approvable.sets[0].requirements[0].same_subject
     # a rule that allows no approval ignores one
     assert PROGRAM.with_approvals(["ext"]) is PROGRAM
+
+
+def test_an_excluded_course_stays_out_under_its_other_codes():
+    # the checklist bars LING 4474; it's also COGST 4740, which the rule doesn't name
+    ling = course("LING 4474", "Natural Language Processing", cross=["COGST 4740"])
+    cogst = course("COGST 4740", "Natural Language Processing", cross=["LING 4474"])
+    cat = Catalog([ling, cogst])
+    rule = EXT.model_copy(
+        update={"filter": EXT.filter.model_copy(update={"exclude": ["LING 4474"]})}
+    )
+    assert not matches(ling, rule, cat) and not matches(cogst, rule, cat)
+    assert courses_by_subject(rule, "SP27", [], cat) == {}
