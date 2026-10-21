@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from app.catalog.store import Catalog
+from app.planner.audit import subjects_of
 from app.planner.eligible import offering_order
 from app.schemas.courses import AllOf, AnyOf, Course, CourseReq, PrereqExpr
 from app.schemas.explore import RankingFactor, Reason
@@ -132,6 +133,9 @@ LIGHT = 0.5
 
 # master's-level courses, which undergraduates can take; 6000+ are PhD seminars
 GRAD_LEVELS = range(5000, 6000)
+# a grad-level course in another department isn't preparation for a CS grad program,
+# and liberal studies or the external specialization shouldn't fill up with them
+GRAD_SUBJECT = "CS"
 BUILDS_ON_MIN = 3000  # an intro course in the plan says little about the student
 LIGHT_MAX_CREDITS = 3
 PROJECT_WORDS = ["practicum", "project", "software engineering", "applications"]
@@ -185,7 +189,7 @@ def rank(
         r = Ranked(course)
         for f in interests:
             _interest(r, f, catalog)
-        if grad and course.level in GRAD_LEVELS:
+        if grad and course.level in GRAD_LEVELS and GRAD_SUBJECT in subjects_of(course):
             f = _strongest(grad)
             r.score += GRAD_LEVEL * WEIGHT[f.status]
             r.reasons.append(_said(f, "A graduate-level course, good preparation for grad school"))

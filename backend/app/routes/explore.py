@@ -7,6 +7,7 @@ from app.catalog.store import get_catalog
 from app.models import now
 from app.planner.audit import audit, cross_listed_with, needed, subjects_of
 from app.planner.eligible import by_offering, courses_by_subject, list_eligible, listed_under
+from app.planner.recommend import rank, standard_courses
 from app.routes.auth import DB, CurrentStudent
 from app.schemas.courses import Course
 from app.schemas.explore import (
@@ -147,8 +148,10 @@ def candidates(
     placement: str | None = None,
 ) -> SlotCandidates:
     """Eligible courses for a requirement slot, optionally narrowed to one subject (with
-    the courses there that can't go in this term, and why). Ranking is a placeholder until
-    the profile-aware recommender lands (Track C); reasons are empty for now."""
+    the courses there that can't go in this term, and why), best fit first: ranked by the
+    student's profile and plan (app/planner/recommend.py), each with its reasons. With
+    nothing in the profile that bears on the slot, the order is how often each course has
+    been offered and no ranking factors are sent, so the page doesn't call it personal."""
     program, req, plan = _slot(slot_id, term, db, student)
     catalog = get_catalog()
     eligible = list_eligible(req, term, plan.placements, catalog)
@@ -190,13 +193,17 @@ def candidates(
         if c.code in not_for_me
     ]
     eligible = [c for c in eligible if c.code not in not_for_me]
+    # the same facts the advisor sees outside a chat: with memory off, only the ones
+    # entered on the profile page or in onboarding
+    facts = [services.fact_schema(f) for f in services.visible_facts(db, student)]
+    ranking = rank(eligible, facts, plan.placements, catalog, standard_courses(program))
     current_idx = plan.terms.index(plan.current_term) if plan.current_term in plan.terms else -1
     assumed = plan.terms.index(term) > current_idx + 1
     top = [
         Candidate(
             course=c.summary(),
             rank=i + 1,
-            reasons=[],
+            reasons=r.reasons,
             official=OfficialInfo(
                 prereqs_met=True,
                 prereq_note=c.prereq_text or "No prerequisites listed",
@@ -205,7 +212,8 @@ def candidates(
             ),
             capped_cross_listings=[s for s in req.max_cross_listed if cross_listed_with(c, s)],
         )
-        for i, c in enumerate(eligible[:limit])
+        for i, r in enumerate(ranking.courses[:limit])
+        for c in [r.course]
     ]
     return SlotCandidates(
         slot_id=req.id,
@@ -213,7 +221,13 @@ def candidates(
         term=term,
         eligible_count=len(eligible),
         candidates=top,
-        ordering="Sorted by how often it’s been offered, most often first",
+        factors=ranking.factors if ranking.personalized else [],
+        ordering=(
+            "Ranked by what you’ve told us and what’s in your plan, then by how often "
+            "it’s been offered"
+            if ranking.personalized
+            else "Sorted by how often it’s been offered, most often first"
+        ),
         hidden=hidden,
         same_subject=req.same_subject,
         subject=subject,

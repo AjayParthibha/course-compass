@@ -151,6 +151,18 @@ def test_phd_seminars_get_no_grad_school_boost():
     assert ranking.courses[1].reasons == []
 
 
+def test_the_grad_school_boost_is_for_cs_courses():
+    # a 5000-level planning course isn't grad school preparation for a CS student;
+    # one cross-listed with CS is
+    planning = course("CRP 5120", "Urban Planning Methods", terms=6)
+    cross = course("ORIE 5355", "Algorithms for Decision Making", terms=2).model_copy(
+        update={"cross_listed": ["CS 5355"]}
+    )
+    ranking = rank([planning, cross], [fact("grad_school", "yes")], [], CAT)
+    assert codes(ranking) == ["ORIE 5355", "CRP 5120"]
+    assert ranking.courses[1].reasons == []
+
+
 def test_intro_courses_in_the_plan_dont_count_as_building_on_them():
     needs_intro = course("CS 4999", "Topics", prereqs=AllOf(items=[CourseReq(code="CS 2110")]))
     plan = [Placement(id="p", term="FA24", course="CS 2110", credits=4, status="completed")]

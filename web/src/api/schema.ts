@@ -451,8 +451,10 @@ export interface paths {
         /**
          * Candidates
          * @description Eligible courses for a requirement slot, optionally narrowed to one subject (with
-         *     the courses there that can't go in this term, and why). Ranking is a placeholder until
-         *     the profile-aware recommender lands (Track C); reasons are empty for now.
+         *     the courses there that can't go in this term, and why), best fit first: ranked by the
+         *     student's profile and plan (app/planner/recommend.py), each with its reasons. With
+         *     nothing in the profile that bears on the slot, the order is how often each course has
+         *     been offered and no ranking factors are sent, so the page doesn't call it personal.
          */
         get: operations["candidates_api_slots__slot_id__candidates_get"];
         put?: never;

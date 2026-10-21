@@ -633,3 +633,55 @@ def test_a_first_semester_students_courses_are_in_progress(client, auth):
 def test_students_who_started_before_the_rules_are_turned_away(client, auth):
     res = confirm_plan(client, auth, "FA23", "SP27")
     assert res.status_code == 400 and "Fall 2024 or later" in res.json()["detail"]
+
+
+def test_candidates_are_ranked_by_the_profile(client, auth):
+    onboard(client, auth)
+    url = "/api/slots/e4000/candidates"
+    params = {"term": "FA27", "limit": 10}
+
+    def get():
+        return client.get(url, params=params, headers=auth).json()
+
+    def codes(res):
+        return [c["course"]["code"] for c in res["candidates"]]
+
+    # nothing in the profile: offered most often first, no reasons, no factors, so the
+    # page says it isn't a personal recommendation
+    before = get()
+    assert codes(before) == ["CS 4740", "CS 4780"]
+    assert all(c["reasons"] == [] for c in before["candidates"])
+    assert before["factors"] == [] and before["ordering"].startswith("Sorted by")
+
+    fact = client.post(
+        "/api/profile/facts",
+        json={"dimension": "interest", "value": "ml", "text": "Interested in machine learning"},
+        headers=auth,
+    ).json()
+    after = get()
+    assert codes(after) == ["CS 4780", "CS 4740"]
+    top = after["candidates"][0]
+    assert top["rank"] == 1
+    assert top["reasons"][0]["text"] == "About machine learning, which you're interested in"
+    assert top["reasons"][0]["basis"] == "stated" and top["reasons"][0]["fact_id"] == fact["id"]
+    factors = {f["label"]: f["strength"] for f in after["factors"]}
+    assert factors["Interests: machine learning"] == "strong"
+    assert factors["Student reviews"] == "not used"
+    assert after["ordering"].startswith("Ranked by what you’ve told us")
+
+    # the student says that's wrong: the list goes back to the official order
+    client.patch(f"/api/profile/facts/{fact['id']}", json={"status": "rejected"}, headers=auth)
+    assert codes(get()) == ["CS 4740", "CS 4780"] and get()["factors"] == []
+
+
+def test_ranking_leaves_hidden_courses_hidden(client, auth):
+    onboard(client, auth)
+    client.post(
+        "/api/profile/facts",
+        json={"dimension": "interest", "value": "ml", "text": "Interested in machine learning"},
+        headers=auth,
+    )
+    client.put("/api/courses/CS 4780/not-interested", headers=auth)
+    res = client.get("/api/slots/e4000/candidates", params={"term": "FA27"}, headers=auth).json()
+    assert [c["course"]["code"] for c in res["candidates"]] == ["CS 4740"]
+    assert [h["course"]["code"] for h in res["hidden"]] == ["CS 4780"]
