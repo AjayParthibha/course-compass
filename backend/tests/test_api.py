@@ -767,3 +767,92 @@ def test_past_chats_are_listed_newest_first(client, auth):
     titles = [c["title"] for c in chats]
     assert titles == ["What's left before I graduate?", "Make Fall ’27 lighter"]
     assert all(c["questions"] == 1 for c in chats)
+
+
+def test_advisor_list_eligible_ranks_like_explore(client, auth):
+    from app import models
+    from app.advisor.tools import ToolContext, call_tool
+    from app.models import SessionLocal
+
+    onboard(client, auth)
+    client.post(
+        "/api/profile/facts",
+        json={"dimension": "interest", "value": "ml", "text": "Interested in machine learning"},
+        headers=auth,
+    )
+    explore = client.get(
+        "/api/slots/e4000/candidates", params={"term": "FA27"}, headers=auth
+    ).json()
+    token = auth["Authorization"].split()[1]
+    with SessionLocal() as db:
+        student = db.query(models.Student).filter_by(token=token).one()
+        ctx = ToolContext(db=db, student=student)
+        res = call_tool(ctx, "list_eligible", {"requirement_id": "e4000", "term": "FA27"})
+    assert res.summary == "2 courses fit, ranked by their profile"
+    assert res.data["ranked_by_profile"]
+    # the same order and reasons the student sees on Explore
+    assert [c["code"] for c in res.data["courses"]] == [
+        c["course"]["code"] for c in explore["candidates"]
+    ]
+    top = res.data["courses"][0]
+    assert top["code"] == "CS 4780"
+    assert top["why"] == [
+        {"text": "About machine learning, which you're interested in", "basis": "stated"}
+    ]
+    # roster facts stay apart from the reasons
+    assert top["official"]["prerequisites"] == "CS 2110"
+
+
+def test_advisor_list_eligible_leaves_out_not_for_me(client, auth):
+    from app import models
+    from app.advisor.tools import ToolContext, call_tool
+    from app.models import SessionLocal
+
+    onboard(client, auth)
+    client.put("/api/courses/CS 4780/not-interested", headers=auth)
+    token = auth["Authorization"].split()[1]
+    with SessionLocal() as db:
+        student = db.query(models.Student).filter_by(token=token).one()
+        res = call_tool(
+            ToolContext(db=db, student=student),
+            "list_eligible",
+            {"requirement_id": "e4000", "term": "FA27"},
+        )
+    assert [c["code"] for c in res.data["courses"]] == ["CS 4740"]
+    assert res.data["not_for_me"] == ["CS 4780"]
+    assert res.summary == "1 course fits" and not res.data["ranked_by_profile"]
+
+
+def test_advisor_with_memory_off_ranks_only_this_conversations_facts(client, auth):
+    from app import models
+    from app.advisor.tools import ToolContext, call_tool
+    from app.models import SessionLocal
+
+    onboard(client, auth)
+    token = auth["Authorization"].split()[1]
+    with SessionLocal() as db:
+        student = db.query(models.Student).filter_by(token=token).one()
+        student.memory_enabled = False
+        # a fact from an earlier chat, and one from this one (conversation 2)
+        for cid, value in ((1, "ml"), (2, "nlp")):
+            db.add(
+                models.ProfileFact(
+                    student_id=student.id,
+                    conversation_id=cid,
+                    dimension="interest",
+                    value=value,
+                    text=f"Interested in {value}",
+                    status="stated",
+                )
+            )
+        db.commit()
+        args = {"requirement_id": "e4000", "term": "FA27"}
+        earlier = call_tool(
+            ToolContext(db=db, student=student, conversation_id=1), "list_eligible", args
+        )
+        later = call_tool(
+            ToolContext(db=db, student=student, conversation_id=2), "list_eligible", args
+        )
+    # the ML fact only counts in the conversation it came from
+    assert earlier.data["courses"][0]["code"] == "CS 4780"
+    assert later.data["courses"][0]["code"] == "CS 4740"

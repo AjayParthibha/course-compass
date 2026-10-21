@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models, services
@@ -7,7 +6,7 @@ from app.catalog.store import get_catalog
 from app.models import now
 from app.planner.audit import audit, cross_listed_with, needed, subjects_of
 from app.planner.eligible import by_offering, courses_by_subject, list_eligible, listed_under
-from app.planner.recommend import rank, rank_areas, standard_courses
+from app.planner.recommend import rank_areas
 from app.routes.auth import DB, CurrentStudent
 from app.schemas.courses import Course
 from app.schemas.explore import (
@@ -23,26 +22,9 @@ from app.schemas.explore import (
 from app.schemas.plans import Placement
 from app.schemas.profile import ProfileFact
 from app.schemas.requirements import Requirement
+from app.services import NOT_INTERESTED, not_interested_facts
 
 router = APIRouter(tags=["explore"])
-
-NOT_INTERESTED = "not_interested"
-
-
-def not_interested_facts(db: Session, student: models.Student, code: str | None = None):
-    """The student's "not for me" facts; with `code`, only those that hide that course,
-    including facts saved under one of its cross-listings."""
-    q = select(models.ProfileFact).where(
-        models.ProfileFact.student_id == student.id,
-        models.ProfileFact.dimension == NOT_INTERESTED,
-        models.ProfileFact.status == "stated",
-    )
-    facts = list(db.scalars(q.order_by(models.ProfileFact.id)))
-    if code is None:
-        return facts
-    catalog = get_catalog()
-    same = catalog.equivalents(code)
-    return [f for f in facts if f.value in same or code in catalog.equivalents(f.value)]
 
 
 def _slot(slot_id: str, term: str, db: Session, student: models.Student):
@@ -194,20 +176,10 @@ def candidates(
         cap = req.max_cross_listed[s]
         reason = f"Only {cap} course{'s' if cap > 1 else ''} cross-listed with {s} can count"
         blocked = [BlockedCourse(course=c.summary(), reason=reason) for c in over] + blocked
-    not_for_me: dict[str, int] = {}
-    for fact in not_interested_facts(db, student):
-        for code in catalog.equivalents(fact.value):
-            not_for_me.setdefault(code, fact.id)
-    hidden = [
-        HiddenCourse(course=c.summary(), fact_id=not_for_me[c.code])
-        for c in eligible
-        if c.code in not_for_me
-    ]
-    eligible = [c for c in eligible if c.code not in not_for_me]
-    # the same facts the advisor sees outside a chat: with memory off, only the ones
-    # entered on the profile page or in onboarding
-    facts = [services.fact_schema(f) for f in services.visible_facts(db, student)]
-    ranking = rank(eligible, facts, plan.placements, catalog, standard_courses(program))
+    # the same ranking the advisor's list_eligible gets, outside a chat
+    ranking, not_for_me = services.rank_for_student(db, student, eligible, plan.placements)
+    hidden = [HiddenCourse(course=c.summary(), fact_id=fid) for c, fid in not_for_me]
+    eligible = [r.course for r in ranking.courses]
     current_idx = plan.terms.index(plan.current_term) if plan.current_term in plan.terms else -1
     assumed = plan.terms.index(term) > current_idx + 1
     top = [

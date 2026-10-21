@@ -115,7 +115,14 @@ def search_courses(ctx: ToolContext, query: str, limit: int = 10) -> ToolResult:
 def list_eligible(ctx: ToolContext, requirement_id: str, term: str, limit: int = 25) -> ToolResult:
     """Courses that would satisfy a requirement in a given term (e.g. "ls", "SP27"):
     they match the rule, prerequisites are done by then, and they've been offered
-    in that season before. Use requirement ids from get_plan_state."""
+    in that season before. Use requirement ids from get_plan_state.
+
+    The list is ranked for this student, best fit first, the same way Explore ranks it.
+    Each course's `why` says what put it there and where that came from: "stated" is
+    something the student told us, "inference" is an unconfirmed guess (confirm it
+    before leaning on it), "plan" is their plan. `official` is roster information,
+    kept apart from those reasons. Courses the student marked "not for me" are left out
+    and listed under `not_for_me`; don't suggest them."""
     st = ctx.student
     program = services.program_for(st)
     req = next((r for r in program.all_requirements() if r.id == requirement_id), None)
@@ -125,13 +132,32 @@ def list_eligible(ctx: ToolContext, requirement_id: str, term: str, limit: int =
     if term not in plan.terms:
         return ToolResult(None, f"{term} isn't one of the plan's terms ({', '.join(plan.terms)})")
     courses = _list_eligible(req, term, plan.placements, get_catalog())
+    ranking, hidden = services.rank_for_student(
+        ctx.db, st, courses, plan.placements, ctx.conversation_id
+    )
     data = {
-        "count": len(courses),
+        "count": len(ranking.courses),
+        "ranked_by_profile": ranking.personalized,
         "courses": [
-            {"code": c.code, "title": c.title, "credits": c.credits} for c in courses[:limit]
+            {
+                "code": r.course.code,
+                "title": r.course.title,
+                "credits": r.course.credits,
+                "why": [{"text": x.text, "basis": x.basis} for x in r.reasons],
+                "official": {
+                    "prerequisites": r.course.prereq_text or "none listed",
+                    "offered": f"{len(r.course.terms_offered)} of the recent terms we have",
+                },
+            }
+            for r in ranking.courses[:limit]
         ],
+        "not_for_me": [c.code for c, _ in hidden],
     }
-    return ToolResult(data, f"{len(courses)} courses fit")
+    n = len(ranking.courses)
+    summary = f"{n} course fits" if n == 1 else f"{n} courses fit"
+    if ranking.personalized:
+        summary += ", ranked by their profile"
+    return ToolResult(data, summary)
 
 
 @tool

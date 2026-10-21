@@ -9,10 +9,12 @@ from app.catalog.store import get_catalog
 from app.config import get_settings
 from app.planner.audit import audit
 from app.planner.ops import apply_ops, term_index, term_label, terms_between
+from app.planner.recommend import Ranking, rank, standard_courses
 from app.planner.solver import RepairRequest, RepairResult, repair
 from app.planner.validate import prereq_edges, validate
 from app.requirements.loader import get_program
 from app.schemas import plans as s
+from app.schemas.courses import Course
 from app.schemas.profile import ProfileFact, Student
 
 parse_ops = TypeAdapter(list[s.PlanOp])
@@ -356,6 +358,49 @@ def visible_facts(db: Session, st: models.Student, conversation_id: int | None =
     if not st.memory_enabled:
         q = q.where(models.ProfileFact.conversation_id == conversation_id)
     return list(db.scalars(q.order_by(models.ProfileFact.id)))
+
+
+NOT_INTERESTED = "not_interested"
+
+
+def not_interested_facts(db: Session, student: models.Student, code: str | None = None):
+    """The student's "not for me" facts; with `code`, only those that hide that course,
+    including facts saved under one of its cross-listings."""
+    q = select(models.ProfileFact).where(
+        models.ProfileFact.student_id == student.id,
+        models.ProfileFact.dimension == NOT_INTERESTED,
+        models.ProfileFact.status == "stated",
+    )
+    facts = list(db.scalars(q.order_by(models.ProfileFact.id)))
+    if code is None:
+        return facts
+    catalog = get_catalog()
+    same = catalog.equivalents(code)
+    return [f for f in facts if f.value in same or code in catalog.equivalents(f.value)]
+
+
+def rank_for_student(
+    db: Session,
+    st: models.Student,
+    courses: list[Course],
+    placements: list[s.Placement],
+    conversation_id: int | None = None,
+) -> tuple[Ranking, list[tuple[Course, int]]]:
+    """`courses` ranked for this student, the same way for Explore and the advisor: the
+    ones they marked "not for me" (under any cross-listed code) come back separately with
+    the fact that hides them, and the rest are ranked by the facts the advisor may use
+    (with memory off, only this conversation's or, outside a chat, the ones from
+    onboarding and the profile page) and by their plan."""
+    catalog = get_catalog()
+    not_for_me: dict[str, int] = {}
+    for fact in not_interested_facts(db, st):
+        for code in catalog.equivalents(fact.value):
+            not_for_me.setdefault(code, fact.id)
+    hidden = [(c, not_for_me[c.code]) for c in courses if c.code in not_for_me]
+    kept = [c for c in courses if c.code not in not_for_me]
+    facts = [fact_schema(f) for f in visible_facts(db, st, conversation_id)]
+    program = program_for(st)
+    return rank(kept, facts, placements, catalog, standard_courses(program)), hidden
 
 
 def repair_plan(
