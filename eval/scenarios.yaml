@@ -116,3 +116,192 @@
   expected:
     outcome: needs_info
     notes: 40+ courses fit; the advisor should ask what the student wants from the course.
+
+# Arts & Sciences (B.A.) scenarios. A typical A&S CS history: the B.A. math (MATH 1110,
+# 1120, 2210), both writing seminars, the language done with SPAN 2090, and nine of the
+# ten distribution categories (ARTH 1100 covers ALC and HST, GOVT 1503 brings GLC); only
+# social difference (SCD) is left. `ops` is the literal edit for validate and model mode,
+# `constraints` the same request for repair_global and rebuild. Placement ids are course
+# codes without spaces, lowercased (cs4701).
+
+- id: as-001-move-practicum
+  split: dev
+  program: cs-as
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  max_credits: 18
+  history: &as_history
+    FA24: [CS 1110, MATH 1110, ENGL 1105, ECON 1110]
+    SP25: [CS 2110, MATH 1120, ENGL 1111, PHIL 1100]
+    FA25: [CS 2800, MATH 2210, SPAN 2090, ARTH 1100]
+    SP26: [CS 3110, CS 3780, CHEM 2070, BIOEE 1610]
+    FA26: [CS 4820, CS 4320, GOVT 1503, PMA 2300]
+  plan: &as_plan
+    SP27: [CS 3410, CS 4740]
+    FA27: [CS 4701]
+    SP28: [CS 4410]
+  request:
+    text: Push CS 4701 to my last spring.
+    ops:
+      - {op: move, course: CS 4701, term: SP28}
+    constraints: {move: {cs4701: SP28}}
+  expected:
+    outcome: feasible
+    notes: CS 4701 runs every term and its prerequisite (CS 3780) is done.
+
+- id: as-002-drop-prereq
+  split: dev
+  program: cs-as
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  max_credits: 18
+  history: *as_history
+  plan: *as_plan
+  request:
+    text: I want to drop CS 3410.
+    ops:
+      - {op: remove, course: CS 3410}
+    constraints: {remove: [cs3410]}
+  expected:
+    outcome: infeasible
+    notes: >-
+      CS 3410 is core and CS 4410 needs it. The only stand-in, CS 3420, needs ECE/ENGRD
+      2300, which isn't in the plan, so it can't simply go.
+
+- id: as-003-ba-math-prereq
+  split: dev
+  program: cs-as
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  max_credits: 18
+  history: *as_history
+  plan: *as_plan
+  request:
+    text: Add CS 4620 next fall.
+    ops:
+      - {op: add, course: CS 4620, term: FA27}
+    constraints: {add: [{course: CS 4620, term: FA27}]}
+  expected:
+    outcome: feasible
+    notes: >-
+      CS 4620 needs "MATH 1910 or MATH 1120" and "MATH 2940 or MATH 2210"; the B.A. math
+      (MATH 1120, MATH 2210) meets both, and it runs in fall.
+
+- id: as-004-wrong-season
+  split: dev
+  program: cs-as
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  max_credits: 18
+  history: *as_history
+  plan: *as_plan
+  request:
+    text: Add CS 4620 in my last spring.
+    ops:
+      - {op: add, course: CS 4620, term: SP28}
+    constraints: {add: [{course: CS 4620, term: SP28}]}
+  expected:
+    outcome: infeasible
+    notes: >-
+      CS 4620 has only run in fall (FA22 to FA26). Validate and model mode only warn about
+      offerings (future terms are assumptions), so they call this feasible.
+
+- id: as-005-remove-distribution-course
+  split: dev
+  program: cs-as
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  max_credits: 18
+  history: *as_history
+  plan:
+    SP27: [CS 3410, CS 4740, AMST 1600]
+    FA27: [CS 4701]
+    SP28: [CS 4410]
+  request:
+    text: Take AMST 1600 out of my plan.
+    ops:
+      - {op: remove, course: AMST 1600}
+    constraints: {remove: [amst1600], allow_removing_courses: true}
+  expected:
+    outcome: feasible
+    notes: >-
+      AMST 1600 is the plan's only social difference (SCD) course, but nothing needs it as
+      a prerequisite, so it can go; an open distribution slot should take its place.
+
+- id: as-006-avoid-course
+  split: dev
+  program: cs-as
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  max_credits: 18
+  history: *as_history
+  plan: *as_plan
+  request:
+    text: I don't want to take CS 4740.
+    ops:
+      - {op: remove, course: CS 4740}
+    constraints: {remove: [cs4740], avoid_courses: [CS 4740]}
+  expected:
+    outcome: feasible
+    notes: CS 4740 isn't core or anyone's prerequisite here; another 4000+ elective can fill its place.
+
+- id: as-007-needs-info
+  split: dev
+  program: cs-as
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  max_credits: 18
+  history: *as_history
+  plan: *as_plan
+  hidden_preferences:
+    interest: how technology affects different communities
+  request:
+    text: What should I take to finish my distribution requirement?
+  expected:
+    outcome: needs_info
+    notes: >-
+      Only social difference (SCD) is left and dozens of courses carry SCD-AS; the advisor
+      should ask what the student would enjoy before picking one.
+
+- id: as-008-cohort-2023
+  split: dev
+  program: cs-as
+  catalog_year: 2023-24
+  entering: FA23
+  graduating: SP27
+  current: FA26
+  max_credits: 18
+  history:
+    FA23: [CS 1110, MATH 1110, ENGL 1105, ECON 1110]
+    SP24: [CS 2110, MATH 1120, ENGL 1111, PHIL 1100]
+    FA24: [CS 2800, MATH 2210, SPAN 2090, ARTH 1100]
+    SP25: [CS 3110, CS 3780, CHEM 2070, BIOEE 1610]
+    FA25: [CS 3410, CS 4320, GOVT 1503, PMA 2300]
+    SP26: [CS 4410, CS 4740, FGSS 2010, ECON 3130]
+    FA26: [CS 4820, CS 4701]
+  request:
+    text: Add CS 4450 in my last spring.
+    ops:
+      - {op: add, course: CS 4450, term: SP27}
+    constraints: {add: [{course: CS 4450, term: SP27}]}
+  expected:
+    outcome: feasible
+    notes: >-
+      A Fall 2023 entrant on the 2023-24 rules: the core, probability (ECON 3130) and
+      practicum done and all ten distribution categories covered (FGSS 2010 brings SCD).
+      CS 4450 runs in spring and has no prerequisites. The starter plan used to add three
+      Engineering math slots here, since the 2023-24 math is one sequence or the other.

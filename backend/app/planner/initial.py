@@ -71,8 +71,13 @@ def seed_slots(
     # take anything get the open slots
     specific = _without_catch_alls(program)
     for stage in (specific, program):
-        leaves = [r for r in stage.all_requirements() if r.kind in ("courses", "filter")]
         statuses = _statuses(out, stage, catalog)
+        skip = _other_branches(stage, statuses)
+        leaves = [
+            r
+            for r in stage.all_requirements()
+            if r.kind in ("courses", "filter") and r.id not in skip
+        ]
         # writing seminars first, then named courses in prerequisite order (each one can
         # move the courses that need it later), then the electives around them
         todo = sorted(leaves, key=lambda r: (r.seed != "earliest", r.kind != "courses"))
@@ -167,6 +172,33 @@ def _catch_all(r: Requirement) -> bool:
     if r.kind != "filter" or f is None or fill_order(r) != 2:
         return False
     return not (f.qualifying_prereq or r.same_subject or r.groups)
+
+
+def _other_branches(program: Program, statuses: dict) -> set[str]:
+    """Ids under "one of" rules that shouldn't get slots: every option once one is met
+    or planned, and otherwise every option but the one with the most progress (the
+    first listed on a tie). Options the student only confirms (flag_only) are never
+    picked, so "an intermediate course or 11 credits" seeds the intermediate course."""
+    skip: set[str] = set()
+    for r in program.all_requirements():
+        if r.kind != "any_of" or r.id in skip:
+            continue
+        if statuses[r.id].status in ("done", "planned"):
+            keep = None
+        else:
+            options = [c for c in r.children if c.kind != "flag_only"]
+            keep = max(options, key=lambda c: _progress(c, statuses), default=None)
+        for child in r.children:
+            if child is not keep:
+                skip.update(d.id for d in child.walk())
+    return skip
+
+
+def _progress(req: Requirement, statuses: dict) -> tuple[int, int]:
+    """How far along an option is: its status, then how many courses count toward it."""
+    st = statuses[req.id]
+    filled = len(st.filled) + sum(_progress(c, statuses)[1] for c in req.children)
+    return ["missing", "flagged", "planned", "done"].index(st.status), filled
 
 
 def _without_catch_alls(program: Program) -> Program:

@@ -722,3 +722,45 @@ def test_both_ba_years_share_the_college_rules():
         return data["requirements"]
 
     assert rules("2023-24") == rules("2024-25")
+
+
+# "one of" rules in the starter plan ----------------------------------------------------
+
+AS_TERMS = ["FA23", "SP24", "FA24", "SP25", "FA25", "SP26", "FA26", "SP27"]
+
+
+def _math_slots(roster, history):
+    rules = load_program("cs-as", "2023-24", ROOT / "requirements")
+    plan = [place(c, term="FA23", credits=4) for c in history]
+    out = seed_slots(plan, AS_TERMS, "FA23", rules, roster)
+    return sorted(p.slot for p in out if not p.course and p.slot.startswith("math"))
+
+
+def test_a_met_math_sequence_gets_no_slots_for_the_other(roster):
+    # the 2023-24 B.A. takes the A&S or the Engineering sequence; with the A&S one done
+    # the starter plan used to add three Engineering math slots as well
+    assert _math_slots(roster, ["MATH 1110", "MATH 1120", "MATH 2210"]) == []
+
+
+def test_only_one_math_sequence_is_seeded(roster):
+    # nothing yet: the first listed sequence, not both (six slots)
+    assert _math_slots(roster, []) == ["math-as"] * 3
+    # a start on the Engineering sequence: finish that one
+    assert _math_slots(roster, ["MATH 1910"]) == ["math-eng"] * 2
+
+
+def test_the_language_gets_one_intermediate_course_slot(roster):
+    rules = load_program("cs-as", "2024-25", ROOT / "requirements")
+    terms = AS_TERMS[2:] + ["FA27", "SP28"]
+    out = seed_slots([], terms, "FA24", rules, roster)
+    assert [p.slot for p in out if p.slot and p.slot.startswith("as-language")] == [
+        "as-language-flopi"
+    ]
+    # SPAN 2090 can fill the language or the major-approved elective, so taking it
+    # leaves one fewer slot between the two, whichever the audit gives it to
+    done = seed_slots([place("SPAN 2090", term="FA24")], terms, "FA24", rules, roster)
+
+    def either(plan):
+        return sum(1 for p in plan if p.slot in ("as-language-flopi", "aae"))
+
+    assert either(done) == either(out) - 1
