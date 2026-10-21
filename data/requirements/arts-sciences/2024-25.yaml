@@ -1,8 +1,14 @@
-# Placeholder for A&S college rules (Track C).
+# A&S college rules for CS majors. Sources, checked 2026-10-20:
+#  - the CS department's A&S checklist for students matriculated Fall 2020 or later
+#    (https://cs.cornell.edu/node/126), which gives the language and distribution rules,
+#  - the 2026-27 Courses of Study, Computer Science (BA), College of Arts & Sciences
+#    requirements (credits, PE, swim test):
+#    https://catalog.cornell.edu/programs/computer-science-ba/
+# Not modelled: residency (six or more semesters for first-year entrants) and grades.
 id: arts-sciences
 label: College of Arts & Sciences
 catalog_year: 2024-25
-source_url: https://as.cornell.edu/degree-requirements
+source_url: https://catalog.cornell.edu/programs/computer-science-ba/
 verified: false
 requirements:
   - id: as-fws
@@ -11,3 +17,88 @@ requirements:
     filter: {title_prefix: "FWS:"}
     count: 2
     seed: earliest
+    notes: Both by the end of sophomore year; matched by roster title.
+
+  # "Completing an intermediate foreign language course at Cornell at the 2000-level or
+  # above" or "Completing at least 11 credits in a single foreign language at Cornell".
+  # The roster marks the first option FLOPI-AS. The second can't be checked from the
+  # course data (several elementary courses, such as JAPAN 1101, carry no language
+  # attribute), so the student confirms it.
+  - id: as-language
+    label: Foreign language
+    kind: any_of
+    children:
+      - id: as-language-flopi
+        label: Intermediate course (2000+)
+        kind: filter
+        filter: {attributes_any: [FLOPI-AS], min_level: 2000, min_credits: 3}
+        count: 1
+      - id: as-language-sequence
+        label: 11 credits in one language
+        kind: flag_only
+        count: 1
+    notes: >-
+      AP, IB and A-Level scores place students but don't fulfil it. Native speakers of
+      another language may be exempted by examination.
+
+  # "Students must take courses that collectively satisfy ten (10) distribution
+  # requirements"; "An A&S course can simultaneously satisfy up to two distribution
+  # requirements"; "Students can double-count distribution requirements on a maximum of
+  # two courses"; "Courses counting toward a major may also count to fulfill distribution
+  # requirements"; "courses must contain the suffix -AS". The catalog adds "at least
+  # eight courses of 3+ credits", which the two-course limit already forces.
+  - id: as-distribution
+    label: Distribution
+    kind: filter
+    filter:
+      attributes_any: [ALC-AS, BIO-AS, ETM-AS, GLC-AS, HST-AS, PHS-AS, SCD-AS, SSC-AS, SDS-AS, SMR-AS]
+      min_credits: 3
+    count: 8
+    groups:
+      - {id: alc, label: "Arts, literature and culture (ALC)", attributes_any: [ALC-AS]}
+      - {id: bio, label: "Biological sciences (BIO)", attributes_any: [BIO-AS]}
+      - {id: etm, label: "Ethics and the mind (ETM)", attributes_any: [ETM-AS]}
+      - {id: glc, label: "Global citizenship (GLC)", attributes_any: [GLC-AS]}
+      - {id: hst, label: "Historical analysis (HST)", attributes_any: [HST-AS]}
+      - {id: phs, label: "Physical sciences (PHS)", attributes_any: [PHS-AS]}
+      - {id: scd, label: "Social difference (SCD)", attributes_any: [SCD-AS]}
+      - {id: ssc, label: "Social sciences (SSC)", attributes_any: [SSC-AS]}
+      - {id: sds, label: "Statistics and data science (SDS)", attributes_any: [SDS-AS]}
+      - {id: smr, label: "Symbolic and mathematical reasoning (SMR)", attributes_any: [SMR-AS]}
+    min_groups: 10
+    groups_per_course: 2
+    max_multi_group_courses: 2
+    double_count: [intro-1110, intro-2110, math-calc1, math-calc2, math-linalg, core-2800, core-3110, core-3410, core-4410, core-4820, core-3780, e4000, practicum, tech, ext, aae]
+    notes: >-
+      Ten categories from at least eight courses of 3+ credits; one course may cover two
+      categories, but only two courses may do that. Major courses count too (CS 1110 and
+      CS 2800 carry SMR-AS). AP, IB and A-Level credit can't count. S/U is allowed unless
+      the course also counts for the major.
+
+  # "120 total, with at least 100 from A&S courses at Cornell and at least 80
+  # for-letter-grade credits". The BA catalog: PE, ROTC under the 3000 level and courses
+  # under the 1100 level don't count toward the CS degree.
+  - id: as-total-credits
+    label: 120 credits
+    kind: total_credits
+    filter: {min_level: 1100, exclude_subjects: [PE], min_level_for: {AIRS: 3000, MILS: 3000, NAVS: 3000}}
+    credits: 120
+
+  # the course data doesn't say which college offers a course, and grades aren't kept
+  - id: as-college-credits
+    label: 100 A&S credits, 80 graded
+    kind: flag_only
+    count: 1
+    notes: At least 100 of the 120 credits from A&S courses, and at least 80 taken for a letter grade.
+
+  - id: as-pe
+    label: Physical education
+    kind: flag_only
+    count: 2
+    notes: Two PE courses (university requirement).
+
+  - id: as-swim
+    label: Swim test
+    kind: flag_only
+    count: 1
+    notes: Pass the swim test (university requirement).

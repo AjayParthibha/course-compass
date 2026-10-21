@@ -95,6 +95,10 @@ class Requirement(RuleSchema):
     # distribution ("a course can count toward at most two categories"); an open slot
     # may cover as many, since the course picked for it can
     groups_per_course: int = Field(default=1, ge=1)
+    # how many counted courses may use that allowance and cover more than one group: the
+    # A&S checklist's "double-count distribution requirements on a maximum of two
+    # courses"; None for no limit
+    max_multi_group_courses: int | None = Field(default=None, ge=0)
     # {2000: 2}: at least two counted courses at the 2000 level or above
     min_at_level: dict[int, int] = {}
     # {3000: 1}: at most one counted course below the 3000 level

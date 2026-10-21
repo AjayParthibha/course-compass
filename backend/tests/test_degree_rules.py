@@ -639,3 +639,86 @@ def test_an_open_slot_can_cover_two_categories():
 def test_groups_per_course_must_be_positive():
     with pytest.raises(ValueError):
         distribution(["ALC"], 1, per=0)
+
+
+def test_only_two_courses_may_cover_two_categories():
+    # three two-category courses would cover six categories, but only two may double up
+    cat = Catalog(
+        [
+            course("A 2000", attributes=["ALC-AS", "HST-AS"]),
+            course("B 2000", attributes=["ETM-AS", "SSC-AS"]),
+            course("C 2000", attributes=["SCD-AS", "GLC-AS"]),
+        ]
+    )
+    categories = ["ALC", "HST", "ETM", "SSC", "SCD", "GLC"]
+    rule = distribution(categories, 3).model_copy(update={"max_multi_group_courses": 2})
+    plan = [place("A 2000"), place("B 2000"), place("C 2000")]
+    assert statuses(plan, program(rule), cat)["dist"].status == "missing"
+    # without the limit the same three courses are enough
+    assert statuses(plan, program(distribution(categories, 3)), cat)["dist"].status == "done"
+    # with two doubled up, a fourth course for the last category completes it
+    cat = Catalog(
+        [
+            *(cat.get(c) for c in ("A 2000", "B 2000")),
+            course("C 2000", attributes=["SCD-AS"]),
+            course("D 2000", attributes=["GLC-AS"]),
+        ]
+    )
+    rule = distribution(categories, 4).model_copy(update={"max_multi_group_courses": 2})
+    plan = [place(c) for c in ("A 2000", "B 2000", "C 2000", "D 2000")]
+    assert statuses(plan, program(rule), cat)["dist"].status == "done"
+
+
+AS_HISTORY = {
+    # the CS major's own courses: CS 1110, CS 2800 and MATH 1110 are SMR-AS
+    "FA24": ["CS 1110", "MATH 1110", "PHYS 1112"],
+    "SP25": ["CS 2110", "MATH 1120", "ECON 1110"],
+    "FA25": ["CS 2800", "MATH 2210", "PSYCH 1101"],
+}
+
+
+def _as_plan(roster, history):
+    rules = load_program("cs-as", "2024-25", ROOT / "requirements")
+    plan = [
+        place(code, term=term, credits=roster.get(code).credits)
+        for term, codes in history.items()
+        for code in codes
+    ]
+    return statuses(plan, rules, roster)
+
+
+def test_the_ba_college_rules_read_the_roster(roster):
+    st = _as_plan(roster, AS_HISTORY)
+    # SMR, PHS and SSC are covered, seven categories are not
+    assert st["as-distribution"].status == "missing"
+    filled = st["as-distribution"].filled
+    assert filled and all(any(a.endswith("-AS") for a in roster.get(c).attributes) for c in filled)
+    # nothing for the language yet: only the student's word for the sequence
+    assert st["as-language"].status == "flagged"
+    assert st["as-language-flopi"].status == "missing"
+    assert st["as-total-credits"].status == "missing"
+    assert st["as-pe"].status == "flagged"
+
+
+def test_an_intermediate_language_course_meets_the_language_rule(roster):
+    st = _as_plan(roster, {**AS_HISTORY, "SP26": ["SPAN 2090"]})
+    assert st["as-language"].status == "done"
+    # Elementary Spanish is FL-AG but not FLOPI-AS, so it doesn't count
+    st = _as_plan(roster, {**AS_HISTORY, "SP26": ["SPAN 1210"]})
+    assert st["as-language-flopi"].status == "missing"
+
+
+def test_major_courses_count_toward_distribution_too(roster):
+    st = _as_plan(roster, AS_HISTORY)
+    assert "CS 2800" in st["as-distribution"].filled
+    assert "CS 2800" in st["core-2800"].filled
+
+
+def test_both_ba_years_share_the_college_rules():
+    def rules(year):
+        data = yaml.safe_load(
+            (ROOT / "requirements" / "arts-sciences" / f"{year}.yaml").read_text()
+        )
+        return data["requirements"]
+
+    assert rules("2023-24") == rules("2024-25")

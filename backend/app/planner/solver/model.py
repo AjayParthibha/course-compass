@@ -373,6 +373,7 @@ class PlanModel:
             ids = [g.id for g in r.groups]
             per = r.groups_per_course
             place: dict[str, list[tuple[Unit, cp_model.IntVar]]] = {g: [] for g in ids}
+            multi: list[cp_model.IntVar] = []  # courses covering more than one group
             for u, a in counted:
                 mine = ids if u.course is None else sorted(u.groups.get(r.id, ()))
                 if not mine:
@@ -386,8 +387,15 @@ class PlanModel:
                     # counted: in none
                     self.m.Add(sum(bs) >= a)
                     self.m.Add(sum(bs) <= per * a)
+                    if r.max_multi_group_courses is not None:
+                        # covering a second group uses one of the rule's allowances
+                        extra = self.m.NewBoolVar(f"multi[{u.id},{r.id}]")
+                        self.m.Add(sum(bs) <= a + (per - 1) * extra)
+                        multi.append(extra)
                 for g, b in zip(mine, bs, strict=True):
                     place[g].append((u, b))
+            if r.max_multi_group_courses is not None and len(multi) > r.max_multi_group_courses:
+                self.m.Add(sum(multi) <= r.max_multi_group_courses)
             for g in r.groups:
                 if g.max_courses is not None and len(place[g.id]) > g.max_courses:
                     self.m.Add(sum(b for _, b in place[g.id]) <= g.max_courses)
