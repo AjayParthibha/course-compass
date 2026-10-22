@@ -370,7 +370,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Parse */
+        /**
+         * Parse
+         * @description Read pasted history. Lines the regex can't read go to the model when there's an
+         *     API key; what it reads comes back as rows to confirm (issue kind model_guess).
+         */
         post: operations["parse_api_onboarding_parse_post"];
         delete?: never;
         options?: never;
@@ -985,7 +989,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "ambiguous_code" | "credit_mismatch" | "ap_credit" | "unknown_course" | "duplicate";
+            kind: "ambiguous_code" | "credit_mismatch" | "ap_credit" | "unknown_course" | "duplicate" | "model_guess";
             /** Message */
             message: string;
             /** Options */

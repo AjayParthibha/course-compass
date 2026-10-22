@@ -1,6 +1,8 @@
 """Parse pasted course history into rows the student confirms.
 
-Regex only for now. Track C adds an LLM fallback for text this can't read.
+Regex first. Lines it can't read go to the model when there's an API key
+(app/onboarding_model.py), and anything the model reads comes back for the student to
+confirm.
 """
 
 import re

@@ -7,6 +7,7 @@ from app import models, services
 from app.catalog.store import get_catalog
 from app.config import get_settings
 from app.onboarding import parse_history
+from app.onboarding_model import openai_ask, read_unread
 from app.planner.initial import seed_slots
 from app.planner.ops import new_id, next_term, term_index, terms_between
 from app.requirements.loader import PROGRAMS, available_years, get_program, rules_year_for
@@ -54,8 +55,16 @@ def options(student: CurrentStudent) -> OnboardingOptions:
 
 @router.post("/parse")
 def parse(body: ParseRequest, student: CurrentStudent) -> ParseResult:
+    """Read pasted history. Lines the regex can't read go to the model when there's an
+    API key; what it reads comes back as rows to confirm (issue kind model_guess)."""
     year = _catalog_year(body.program, body.entering_term)
-    courses, unread = parse_history(body.text, get_catalog())
+    catalog = get_catalog()
+    courses, unread = parse_history(body.text, catalog)
+    settings = get_settings()
+    if unread and settings.openai_api_key:
+        ask = openai_ask(settings.openai_api_key, settings.advisor_model)
+        guessed, unread = read_unread(body.text, unread, catalog, ask)
+        courses += guessed
     return ParseResult(courses=courses, catalog_year=year, unread=unread)
 
 

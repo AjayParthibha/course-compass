@@ -920,3 +920,52 @@ def test_advisor_plan_question_asks_until_the_profile_decides(client, auth, cata
     # answer would change the rest
     assert second.data["ask"] is False and second.data["question"] is None
     assert second.summary == "no question needed"
+
+
+def test_parse_asks_the_model_about_unread_lines_only_with_a_key(client, auth, monkeypatch):
+    import json as _json
+
+    from app.config import get_settings
+    from app.routes import onboarding as route
+
+    body = {
+        "text": "FA25 CS 2110\nmachine learning 4780",
+        "program": "cs-eng",
+        "entering_term": "FA24",
+    }
+    # no key: regex only, the line stays unread
+    plain = client.post("/api/onboarding/parse", json=body, headers=auth).json()
+    assert plain["unread"] == ["machine learning 4780"]
+    assert [c["code"] for c in plain["courses"]] == ["CS 2110"]
+
+    prompts = []
+
+    def fake_ask(key, model):
+        def ask(prompt):
+            prompts.append(prompt)
+            return _json.dumps({"lines": [{"line": 0, "codes": ["CS 4780"]}]})
+
+        return ask
+
+    monkeypatch.setattr(get_settings(), "openai_api_key", "test-key")
+    monkeypatch.setattr(route, "openai_ask", fake_ask)
+    res = client.post("/api/onboarding/parse", json=body, headers=auth).json()
+    assert res["unread"] == []
+    guess = res["courses"][-1]
+    assert guess["issue"]["kind"] == "model_guess" and guess["code"] is None
+    assert guess["term"] == "FA25"
+    assert [o["value"] for o in guess["issue"]["options"]] == ["CS 4780", "drop"]
+    assert "CS 4780: Machine Learning" in prompts[0]
+
+    # confirming the pick is the same as any other chosen course
+    done = client.post(
+        "/api/onboarding/confirm",
+        json={
+            "program": "cs-eng",
+            "entering_term": "FA24",
+            "graduation_term": "SP28",
+            "courses": [{"term": "FA25", "code": "CS 2110"}, {"term": "FA25", "code": "CS 4780"}],
+        },
+        headers=auth,
+    )
+    assert done.status_code == 200

@@ -61,7 +61,12 @@ const issueLabel: Record<string, string> = {
   ap_credit: 'Check this',
   unknown_course: 'Not found',
   duplicate: 'Listed twice',
+  model_guess: 'Is this right?',
 }
+
+// issues answered by choosing a course: its code is the choice (or "drop")
+const picksCourse = (kind: string | undefined) =>
+  kind === 'ambiguous_code' || kind === 'unknown_course' || kind === 'model_guess'
 
 const STEPS: Record<Stage, [string, string][]> = {
   continuing: [
@@ -150,7 +155,7 @@ function Row({
   const name = course.code ?? course.raw
   const issue = course.issue
   const resolved = !issue || choice !== undefined
-  const picked = issue?.kind === 'ambiguous_code' && choice !== undefined
+  const picked = (issue?.kind === 'ambiguous_code' || issue?.kind === 'model_guess') && choice !== undefined && choice !== 'drop'
   return (
     <li className="flex flex-col gap-2 border-t border-line-soft px-4 py-3 first:border-t-0">
       <div className="flex flex-wrap items-center gap-3">
@@ -187,7 +192,9 @@ function Row({
             ))}
           </div>
           {/* a course we couldn't match, or a "211x" with no listed options: find it in the roster */}
-          {(issue.kind === 'unknown_course' || (issue.kind === 'ambiguous_code' && issue.options.length === 0)) && (
+          {(issue.kind === 'unknown_course' ||
+            issue.kind === 'model_guess' ||
+            (issue.kind === 'ambiguous_code' && issue.options.length === 0)) && (
             <CourseSearch label={`Find the course for ${name}`} onPick={onReplace} />
           )}
         </div>
@@ -326,8 +333,7 @@ export default function OnboardingPage() {
     const courses = parsed.courses.flatMap((c) => {
       const choice = choices[c.id]
       if (choice === 'drop' || c.issue?.kind === 'ap_credit') return []
-      if (c.issue?.kind === 'ambiguous_code' || c.issue?.kind === 'unknown_course')
-        return [{ term: c.term, code: choice }]
+      if (picksCourse(c.issue?.kind)) return [{ term: c.term, code: choice }]
       if (c.issue?.kind === 'credit_mismatch') return [{ term: c.term, code: c.code!, credits: Number(choice) }]
       // transcript credits are what was earned (variable-credit courses differ from the roster)
       return c.code ? [{ term: c.term, code: c.code, credits: c.credits ?? undefined }] : []

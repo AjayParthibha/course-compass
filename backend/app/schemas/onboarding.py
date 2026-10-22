@@ -3,7 +3,11 @@ from typing import Literal
 from app.schemas.base import Schema
 from app.schemas.profile import CreditCap, Term
 
-IssueKind = Literal["ambiguous_code", "credit_mismatch", "ap_credit", "unknown_course", "duplicate"]
+# model_guess: a line only the model could read; its options are its picks from the
+# roster, and nothing counts until the student chooses one
+IssueKind = Literal[
+    "ambiguous_code", "credit_mismatch", "ap_credit", "unknown_course", "duplicate", "model_guess"
+]
 
 
 class IssueOption(Schema):
