@@ -16,8 +16,10 @@ from sqlalchemy.orm import Session
 from app import models, services
 from app.catalog.store import get_catalog
 from app.models import now
+from app.planner.elicit import plan_question as _plan_question
 from app.planner.eligible import list_eligible as _list_eligible
 from app.planner.ops import term_label
+from app.planner.recommend import standard_courses
 from app.planner.solver import RepairRequest, RequestError
 from app.schemas.advisor import ProfileUpdateEvent, ProposalEvent, QuestionEvent
 from app.schemas.plans import AdvisorOp, ProposedChange, RejectedOption
@@ -158,6 +160,62 @@ def list_eligible(ctx: ToolContext, requirement_id: str, term: str, limit: int =
     if ranking.personalized:
         summary += ", ranked by their profile"
     return ToolResult(data, summary)
+
+
+@tool
+def plan_question(ctx: ToolContext, requirement_id: str, term: str) -> ToolResult:
+    """Before recommending courses for a slot, check whether a question is worth
+    asking first. It tries each likely answer to each question you could ask, ranks the
+    slot's courses as if the student had given it, and sees how much the top picks
+    move. If `ask` is true, ask exactly that question with ask_student (its text,
+    options and dimension), then save their answer with update_profile using the
+    option's `save` facts. If `ask` is false, recommend from list_eligible without
+    asking. It never suggests questions the student already answered or asked to
+    leave for later."""
+    st = ctx.student
+    program = services.program_for(st)
+    req = next((r for r in program.all_requirements() if r.id == requirement_id), None)
+    if req is None:
+        return ToolResult(None, f"no requirement {requirement_id}")
+    plan = services.plan_schema(ctx.db, st, services.get_plan(ctx.db, st))
+    if term not in plan.terms:
+        return ToolResult(None, f"{term} isn't one of the plan's terms ({', '.join(plan.terms)})")
+    courses = _list_eligible(req, term, plan.placements, get_catalog())
+    ranking, _ = services.rank_for_student(
+        ctx.db, st, courses, plan.placements, ctx.conversation_id
+    )
+    facts = [
+        services.fact_schema(f) for f in services.visible_facts(ctx.db, st, ctx.conversation_id)
+    ]
+    result = _plan_question(
+        [r.course for r in ranking.courses],
+        facts,
+        plan.placements,
+        get_catalog(),
+        standard_courses(program),
+        req.label.lower(),
+    )
+    q = result.ask
+    data = {
+        "ask": q is not None,
+        "reason": result.reason,
+        "question": q
+        and {
+            "text": q.text,
+            "dimension": q.dimension,
+            "options": [
+                {
+                    "label": o.label,
+                    "save": [{"dimension": d, "value": v} for d, v in o.facts],
+                    "top_picks_if_chosen": o.picks,
+                }
+                for o in q.options
+            ],
+        },
+    }
+    if q:
+        return ToolResult(data, f"worth asking about {q.dimension} ({q.disagreement:.0%} apart)")
+    return ToolResult(data, "no question needed")
 
 
 @tool

@@ -856,3 +856,67 @@ def test_advisor_with_memory_off_ranks_only_this_conversations_facts(client, aut
     # the ML fact only counts in the conversation it came from
     assert earlier.data["courses"][0]["code"] == "CS 4780"
     assert later.data["courses"][0]["code"] == "CS 4740"
+
+
+def test_advisor_plan_question_asks_until_the_profile_decides(client, auth, catalog, monkeypatch):
+    from app import models
+    from app.advisor.tools import ToolContext, call_tool
+    from app.models import SessionLocal
+
+    # liberal studies options from three subjects
+    for code, name in [
+        ("PHIL 1100", "Philosophy"),
+        ("PHIL 2400", "Philosophy"),
+        ("HIST 1530", "History"),
+        ("HIST 2000", "History"),
+        ("SOC 1101", "Sociology"),
+        ("SOC 2200", "Sociology"),
+    ]:
+        subject, number = code.split()
+        monkeypatch.setitem(
+            catalog.courses,
+            code,
+            Course(
+                code=code,
+                subject=subject,
+                number=number,
+                title=f"Topics in {name}",
+                credits_min=3,
+                credits_max=3,
+                attributes=["SSC-AS"],
+                terms_offered=["FA25", "SP26", "FA26"],
+                typical_seasons=["FA", "SP"],
+            ),
+        )
+        monkeypatch.setitem(catalog.subject_names, subject, name)
+    onboard(client, auth)
+    token = auth["Authorization"].split()[1]
+    args = {"requirement_id": "ls", "term": "SP27"}
+    with SessionLocal() as db:
+        student = db.query(models.Student).filter_by(token=token).one()
+        ctx = ToolContext(db=db, student=student)
+        assert call_tool(ctx, "plan_question", {**args, "requirement_id": "nope"}).data is None
+        first = call_tool(ctx, "plan_question", args)
+    # liberal studies with an empty profile: the subjects lead to different courses
+    assert first.data["ask"] and first.summary.startswith("worth asking about interest")
+    q = first.data["question"]
+    assert q["dimension"] == "interest"
+    options = {o["label"]: o for o in q["options"]}
+    assert len(options) > 1
+    label, chosen = next(iter(options.items()))
+    assert chosen["save"] == [{"dimension": "interest", "value": label}]
+    assert chosen["top_picks_if_chosen"]
+
+    # the student answers; the advisor saves it as told, and the question is settled
+    client.post(
+        "/api/profile/facts",
+        json={"dimension": "interest", "value": label, "text": f"Interested in {label}"},
+        headers=auth,
+    )
+    with SessionLocal() as db:
+        student = db.query(models.Student).filter_by(token=token).one()
+        second = call_tool(ToolContext(db=db, student=student), "plan_question", args)
+    # nothing left to ask: philosophy decides two of the three picks, and no other
+    # answer would change the rest
+    assert second.data["ask"] is False and second.data["question"] is None
+    assert second.summary == "no question needed"

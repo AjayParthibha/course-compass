@@ -4,6 +4,8 @@
     uv run python -m harness.run --mode validate --split heldout
     uv run python -m harness.run --mode repair_global --scenarios advisor_scenarios.yaml
 
+    uv run python -m harness.run --mode elicit
+
 Each mode is a function (scenario, catalog, program) -> dict of result columns.
 Add new modes (repair, rebuild, llm_direct, advisor...) to MODES.
 """
@@ -18,12 +20,16 @@ from pydantic import TypeAdapter
 
 from app.catalog.store import get_catalog
 from app.planner.audit import audit
+from app.planner.elicit import plan_question
+from app.planner.eligible import list_eligible
 from app.planner.initial import seed_slots
 from app.planner.ops import OpError, apply_ops
+from app.planner.recommend import standard_courses
 from app.planner.solver import RepairRequest, check_plan, repair
 from app.planner.validate import validate
 from app.requirements.loader import load_program
 from app.schemas.plans import PlanOp
+from app.schemas.profile import ProfileFact
 from harness.scenario import Scenario, load_scenarios
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -110,6 +116,56 @@ def _solve(s: Scenario, catalog, program, strategy: str) -> dict:
     }
 
 
+def _elicit(s: Scenario, catalog, program, fixed: bool) -> dict:
+    """Should the advisor ask before recommending for the request's slot? Adaptive
+    (planner/elicit.py) asks only when likely answers lead to different top picks;
+    the fixed questionnaire baseline always asks. "feasible" here means it can
+    recommend right away, "needs_info" that it asks first."""
+    if s.request.slot is None:
+        return {"predicted": "n/a", "error": "scenario has no request.slot"}
+    req = next((r for r in program.all_requirements() if r.id == s.request.slot.requirement), None)
+    if req is None:
+        return {"predicted": "n/a", "error": f"no requirement {s.request.slot.requirement}"}
+    placements = s.placements(catalog)
+    courses = list_eligible(req, s.request.slot.term, placements, catalog)
+    if fixed:
+        return {"predicted": "needs_info", "questions": 1, "eligible": len(courses)}
+    when = datetime.now()
+    facts = [
+        ProfileFact(
+            id=i,
+            dimension=d,
+            value=v,
+            text=v,
+            status="stated",
+            created_at=when,
+            updated_at=when,
+        )
+        for i, (d, v) in enumerate(s.profile.items(), 1)
+    ]
+    plan = plan_question(
+        courses, facts, placements, catalog, standard_courses(program), req.label.lower()
+    )
+    q = plan.ask
+    return {
+        "predicted": "needs_info" if q else "feasible",
+        "questions": int(q is not None),
+        "eligible": len(courses),
+        "question": q.dimension if q else "",
+        "options": len(q.options) if q else 0,
+        "disagreement": round(q.disagreement, 2) if q else "",
+        "reason": plan.reason,
+    }
+
+
+def run_elicit(s: Scenario, catalog, program) -> dict:
+    return _elicit(s, catalog, program, fixed=False)
+
+
+def run_elicit_fixed(s: Scenario, catalog, program) -> dict:
+    return _elicit(s, catalog, program, fixed=True)
+
+
 def run_repair_global(s: Scenario, catalog, program) -> dict:
     return _solve(s, catalog, program, "global")
 
@@ -123,6 +179,8 @@ MODES = {
     "model": run_model,
     "repair_global": run_repair_global,
     "rebuild": run_rebuild,
+    "elicit": run_elicit,
+    "elicit_fixed": run_elicit_fixed,
 }
 
 

@@ -113,6 +113,7 @@
     ls_goal: explore a new field
   request:
     text: What should I take for my liberal studies slot in spring?
+    slot: {requirement: ls, term: SP27}
   expected:
     outcome: needs_info
     notes: 40+ courses fit; the advisor should ask what the student wants from the course.
@@ -271,6 +272,7 @@
     interest: how technology affects different communities
   request:
     text: What should I take to finish my distribution requirement?
+    slot: {requirement: as-distribution, term: SP27}
   expected:
     outcome: needs_info
     notes: >-
@@ -305,3 +307,112 @@
       practicum done and all ten distribution categories covered (FGSS 2010 brings SCD).
       CS 4450 runs in spring and has no prerequisites. The starter plan used to add three
       Engineering math slots here, since the 2023-24 math is one sequence or the other.
+
+# Elicitation scenarios: should the advisor ask before recommending for a slot? Run with
+# --mode elicit (asks only when likely answers lead to different top picks) and
+# --mode elicit_fixed (the fixed-questionnaire baseline, which always asks). "feasible"
+# means it can recommend right away; "needs_info" that a question should come first.
+# `profile` is what the student already told us.
+
+- id: eng-006-elective-profile-decides
+  split: dev
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: &eng_history
+    FA24: [CS 1110, MATH 1910, CHEM 2090]
+    SP25: [CS 2110, MATH 1920, PHYS 1112]
+    FA25: [CS 2800, MATH 2940, PHYS 2213, ECON 1110]
+    SP26: [CS 3110, ENGRD 2700, PSYCH 1101]
+    FA26: [CS 3780, CS 4820, ORIE 3300]
+  plan:
+    SP27: [CS 3410]
+  profile: {interest: ml, career_track: industry}
+  request:
+    text: Which 4000-level elective should I take in spring?
+    slot: {requirement: e4000, term: SP27}
+  expected:
+    outcome: feasible
+    notes: >-
+      They said machine learning and an industry job, and several spring electives are
+      about machine learning, so there's nothing left worth asking.
+
+- id: eng-007-elective-empty-profile
+  split: dev
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *eng_history
+  plan:
+    SP27: [CS 3410]
+  request:
+    text: Which 4000-level elective should I take in spring?
+    slot: {requirement: e4000, term: SP27}
+  hidden_preferences:
+    interest: security
+  expected:
+    outcome: needs_info
+    notes: >-
+      Dozens of electives across ML, systems, theory and security, and nothing in the
+      profile to choose between them.
+
+- id: eng-008-one-option
+  split: dev
+  program: cs-eng
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *eng_history
+  plan:
+    SP27: [CS 3410]
+  request:
+    text: What should I take for the physics lab?
+    slot: {requirement: eng-phys-lab, term: SP27}
+  expected:
+    outcome: feasible
+    notes: The lab is PHYS 1110 and nothing else, so there's no choice to ask about.
+
+- id: as-009-field-named
+  split: dev
+  program: cs-as
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *as_history
+  plan: *as_plan
+  profile: {interest: History}
+  request:
+    text: What should I take for my distribution requirement in spring?
+    slot: {requirement: as-distribution, term: SP27}
+  expected:
+    outcome: feasible
+    notes: >-
+      They named a field, and dozens of History courses carry an A&S distribution
+      category, so the profile already picks the top courses.
+
+- id: as-010-cs-interest-only
+  split: dev
+  program: cs-as
+  catalog_year: 2024-25
+  entering: FA24
+  graduating: SP28
+  current: FA26
+  history: *as_history
+  plan: *as_plan
+  profile: {interest: ml}
+  hidden_preferences:
+    interest: Philosophy
+  request:
+    text: What should I take for my distribution requirement in spring?
+    slot: {requirement: as-distribution, term: SP27}
+  expected:
+    outcome: needs_info
+    notes: >-
+      An interest in machine learning says nothing about which humanities or science
+      course they'd enjoy, the proposal's own example of when to ask.

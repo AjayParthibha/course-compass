@@ -20,6 +20,9 @@ remove or replace them; if a locked course is in the way, say so and let the stu
 - When a recommendation depends on something you don't know about the student and the \
 answer would change your pick, ask with ask_student (one question at a time). Don't ask \
 about things already in their profile unless something they said since contradicts it.
+- Before recommending courses for an open slot, call plan_question. If it says to ask, \
+ask its question with its options, then save the answer the way it says. If it says no \
+question is needed, recommend right away.
 - Record what the student tells you about their goals and preferences with \
 update_profile. Use "stated" only for what they actually said; mark your own guesses \
 "inferred".

@@ -9,12 +9,19 @@ from app.planner.ops import terms_between
 from app.schemas.plans import Placement
 
 
+class Slot(BaseModel):
+    requirement: str  # e.g. "ls"
+    term: str  # e.g. "SP27"
+
+
 class Request(BaseModel):
     text: str | None = None  # what the student says, for advisor / LLM modes
     # structured edits; `course` is resolved to a placement id when the scenario loads
     ops: list[dict[str, Any]] = []
     # the same request for the solver (a RepairRequest), for repair and advisor modes
     constraints: dict[str, Any] | None = None
+    # the open slot a "what should I take?" request is about, for the elicit modes
+    slot: Slot | None = None
 
 
 class Expected(BaseModel):
@@ -34,6 +41,8 @@ class Scenario(BaseModel):
     history: dict[str, list[str]] = {}  # term -> courses already taken (or taking now)
     plan: dict[str, list[str]] = {}  # term -> courses planned later
     hidden_preferences: dict[str, str] = {}  # for elicitation runs
+    # what the student already told us, as stated profile facts ({dimension: value})
+    profile: dict[str, str] = {}
     request: Request
     expected: Expected
 

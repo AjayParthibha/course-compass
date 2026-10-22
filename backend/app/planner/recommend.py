@@ -319,7 +319,8 @@ def _strongest(facts: list[ProfileFact]) -> ProfileFact:
 
 
 def _when(f: ProfileFact) -> datetime:
-    return f.last_confirmed_at or f.updated_at
+    # compared without the zone: SQLite hands back naive times, other sources aware ones
+    return (f.last_confirmed_at or f.updated_at).replace(tzinfo=None)
 
 
 def _said(f: ProfileFact, text: str) -> Reason:
