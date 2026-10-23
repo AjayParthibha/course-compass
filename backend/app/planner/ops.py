@@ -75,7 +75,10 @@ def apply_ops(
             case AddOp():
                 check_term(op.term)
                 if bool(op.course) == bool(op.slot):
-                    raise OpError("add needs exactly one of course or slot")
+                    raise OpError(
+                        "add takes a course or a slot (one of them). To put a course in an "
+                        "open slot, replace that slot's placement with the course."
+                    )
                 credits = SLOT_CREDITS
                 if op.course:
                     course = catalog.get(op.course)

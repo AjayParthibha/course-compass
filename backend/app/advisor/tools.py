@@ -18,7 +18,7 @@ from app.catalog.store import get_catalog
 from app.models import now
 from app.planner.elicit import plan_question as _plan_question
 from app.planner.eligible import list_eligible as _list_eligible
-from app.planner.ops import term_label
+from app.planner.ops import OpError, term_label
 from app.planner.recommend import standard_courses
 from app.planner.solver import RepairRequest, RequestError
 from app.schemas.advisor import ProfileUpdateEvent, ProposalEvent, QuestionEvent
@@ -277,7 +277,11 @@ def propose_changes(
     them. The planner re-checks the result and reports any violations back.
     Placements with `locked: true` are kept in their term by the student: don't
     move, remove or replace them."""
-    proposal = services.create_proposal(ctx.db, ctx.student, ops, summary, changes, rejected)
+    try:
+        proposal = services.create_proposal(ctx.db, ctx.student, ops, summary, changes, rejected)
+    except OpError as e:
+        # an edit the plan can't take at all (unknown course, missing placement): say which
+        return ToolResult({"error": str(e)}, f"edit rejected: {e}")
     ctx.events.append(ProposalEvent(proposal=proposal))
     ctx.drafts.append(proposal.id)
     blocking = [v.message for v in proposal.violations if v.blocking]
@@ -358,7 +362,7 @@ def _withdraw_broken_drafts(ctx: ToolContext) -> list[int]:
         if row is None or row.status != "pending":
             continue
         if any(v.get("blocking") for v in row.violations):
-            row.status = "discarded"
+            row.status = "withdrawn"
             ids.append(row.id)
     if ids:
         ctx.db.commit()

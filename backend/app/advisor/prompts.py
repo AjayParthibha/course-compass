@@ -38,6 +38,12 @@ season before. Say so when it matters.
 internals, tools, placement ids or proposal numbers. Say what changes in plain words: \
 which course or slot moves, from which term to which, and why ("I moved your liberal \
 studies slot from Spring ’27 to Spring ’28, so spring is 12 credits").
+- A discarded suggestion can't be applied any more, and it isn't necessarily wrong. If the \
+student said what was off, fix that. If they ask for the same thing again without saying, \
+make the same suggestion again as a new proposal (say it matches the one they set aside); \
+don't question them about it, and never point them back to the discarded one.
+- "Ask me later" means go ahead without that answer: do what they asked with your best \
+judgement and say what you assumed. Don't end the turn without doing it.
 - Be brief. Students read this next to their plan, not as an essay. Don't repeat what \
 the tool rows already show."""
 
@@ -61,6 +67,33 @@ def context_block(db, student: models.Student, conversation_id: int | None) -> s
         lines += [f"- [{f.status}] {f.text} (id {f.id})" for f in facts]
     else:
         lines.append("Profile: nothing on file yet.")
+    lines += _suggestion_lines(db, student, conversation_id)
     if not student.memory_enabled:
         lines.append("Memory is off: don't rely on anything from earlier sessions.")
     return "\n".join(lines)
+
+
+# how each status reads to the advisor; a withdrawn draft is already in its own tool output
+SUGGESTION_STATUS = {
+    "pending": "waiting for the student",
+    "applied": "applied",
+    "discarded": "discarded by the student, so it can't be applied; propose again if needed",
+    "outdated": "outdated: the plan changed since, so it can't be applied",
+}
+
+
+def _suggestion_lines(db, student: models.Student, conversation_id: int | None) -> list[str]:
+    """Where this chat's suggestions stand now (the student applies or discards them outside it)."""
+    convo = db.get(models.Conversation, conversation_id) if conversation_id else None
+    if convo is None:
+        return []
+    shown = [
+        p
+        for p in services.conversation_proposals(db, student, convo).values()
+        if p.status in SUGGESTION_STATUS
+    ][-6:]
+    if not shown:
+        return []
+    return ["Your suggestions in this chat, oldest first:"] + [
+        f"- {p.summary}: {SUGGESTION_STATUS[p.status]}" for p in shown
+    ]

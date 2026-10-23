@@ -121,7 +121,7 @@ export default function PlanPage() {
       </p>
     )
   } else if (proposalId) {
-    content = <ProposalView id={proposalId} current={state} />
+    content = <ProposalView key={proposalId} id={proposalId} current={state} />
   } else {
     const problems = state.violations.filter((v) => v.blocking)
     const hasSelection = state.plan.placements.some((p) => p.id === selected)

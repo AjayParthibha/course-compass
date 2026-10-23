@@ -73,7 +73,7 @@ def get_conversation(conversation_id: int, db: DB, student: CurrentStudent) -> C
 
 
 def _conversation(db: Session, student: models.Student, convo: models.Conversation) -> Conversation:
-    current = _current_proposals(db, student, convo)
+    current = services.conversation_proposals(db, student, convo)
     out = []
     for m in convo.messages:
         if not m.events:
@@ -87,22 +87,3 @@ def _conversation(db: Session, student: models.Student, convo: models.Conversati
         ]
         out.append(ChatMessage(id=m.id, role=role, events=events))
     return Conversation(id=convo.id, messages=out)
-
-
-def _current_proposals(db: Session, student: models.Student, convo: models.Conversation):
-    """Proposals in this conversation as they stand now; events keep the snapshot from creation."""
-    ids = [
-        e["proposal"]["id"]
-        for m in convo.messages
-        for e in m.events or []
-        if e.get("type") == "proposal"
-    ]
-    if not ids or not student.plans:
-        return {}
-    plan = services.get_plan(db, student)
-    rows = db.scalars(
-        select(models.Proposal).where(
-            models.Proposal.id.in_(ids), models.Proposal.plan_id == plan.id
-        )
-    )
-    return {r.id: services.proposal_schema(r, plan.version) for r in rows}

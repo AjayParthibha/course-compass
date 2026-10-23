@@ -1,17 +1,35 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect } from 'react'
+import { useNavigate } from 'react-router'
 import { api, unwrap } from '../../api/client'
 import { keys, useLatestConversation } from '../../api/hooks'
 import { streamChat } from '../../api/sse'
-import type { AdvisorEvent, Conversation } from '../../api/types'
-import { useAdvisor, type Turn } from './store'
+import type { AdvisorEvent, Conversation, Proposal } from '../../api/types'
+import { hasBlocking } from './proposalState'
+import { useAdvisor, WIDE_QUERY, type Turn } from './store'
 
 let nextId = 0
 const turnId = () => `t${++nextId}`
 
 export function useChat() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const history = useLatestConversation()
+
+  // A proposal that passed the planner check opens in the graph by itself, the way an edit shows
+  // up in place; the student still applies or discards it. Only beside the plan: not from another
+  // page, not under the chat drawer on a narrow screen, and not while a card is being dragged.
+  const showInGraph = useCallback(
+    (id: number) => {
+      if (qc.getQueryData<Proposal>(keys.proposal(id))?.status !== 'pending') return
+      if (window.location.pathname !== '/plan' || !window.matchMedia(WIDE_QUERY).matches) return
+      if (document.querySelector('[data-dragging]')) return
+      const params = new URLSearchParams(window.location.search)
+      params.set('proposal', String(id))
+      navigate({ search: params.toString() })
+    },
+    [qc, navigate],
+  )
 
   // history carries each proposal's current status; seed the cache the cards read from
   const show = useCallback(
@@ -62,6 +80,8 @@ export function useChat() {
         push(event)
         if (event.type === 'proposal') {
           qc.setQueryData(keys.proposal(event.proposal.id), event.proposal)
+          // open it while the reply is still coming; a broken draft stays in the chat only
+          if (event.proposal.status === 'pending' && !hasBlocking(event.proposal)) showInGraph(event.proposal.id)
           // a proposal needs the student's eyes; on wide screens bring the panel back
           useAdvisor.getState().reveal()
         }

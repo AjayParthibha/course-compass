@@ -66,12 +66,24 @@ export default function Message({ role, events, live, canAnswer, onAnswer, lates
               </div>
             </div>
           )
-        if (e.type === 'proposal') return <ProposalCard key={i} initial={e.proposal} latestId={latestProposalId} />
+        if (e.type === 'proposal')
+          return (
+            <ProposalCard
+              key={i}
+              initial={e.proposal}
+              latestId={latestProposalId}
+              onReason={canAnswer ? onAnswer : undefined}
+            />
+          )
         if (e.type === 'profile_update')
           return (
             <span key={i} className="text-[12.5px] text-muted">
               Saved to your profile: “{e.fact.text}”
-              {e.fact.status === 'stated' ? ' (something you said)' : ' (a guess, until you confirm)'}
+              {e.fact.status === 'stated'
+                ? ' (something you said)'
+                : e.fact.status === 'open'
+                  ? ' (to come back to)'
+                  : ' (a guess, until you confirm)'}
             </span>
           )
         if (e.type === 'error')

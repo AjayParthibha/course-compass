@@ -1,26 +1,62 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import {
   useApplyProposal,
   useDiscardProposal,
   useProposal,
   useProposalPreview,
+  useRestoreProposal,
   useUndo,
 } from '../../api/hooks'
 import type { PlanState } from '../../api/types'
 import { Button, SectionLabel } from '../../ui'
 import { termLabel } from '../../ui/terms'
+import { useAdvisor, WIDE_QUERY } from '../advisor/store'
 import DegreeGraph from './DegreeGraph'
+import { proposalChanges, revealFrame } from './reveal'
+
+// proposals whose changes have already landed one by one this visit; opening one again shows it whole
+const played = new Set<number>()
+const START_MS = 350
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 export default function ProposalView({ id, current }: { id: number; current: PlanState }) {
   const [, setParams] = useSearchParams()
   const [showAfter, setShowAfter] = useState(true)
   const { data: proposal, error: proposalError } = useProposal(id)
-  const { data: preview, error: previewError } = useProposalPreview(id)
+  const { data: preview, error: previewError } = useProposalPreview(id, current.plan.version)
   const apply = useApplyProposal()
   const discard = useDiscardProposal()
+  const restore = useRestoreProposal()
   const undo = useUndo()
   const close = () => setParams({})
+
+  // The first time a proposal opens, its changes land one at a time (about a second in all),
+  // starting from the plan as it is, which shows while the preview loads. Apply works throughout.
+  const [opened] = useState(() => performance.now())
+  const [done, setDone] = useState(() => played.has(id))
+  const [step, setStep] = useState(0)
+  const changes = useMemo(() => (preview ? proposalChanges(current, preview) : []), [current, preview])
+  const playing = !done && !!preview && proposal?.status === 'pending' && showAfter && !reducedMotion()
+  useEffect(() => {
+    if (!playing) return
+    played.add(id)
+    const every = Math.min(280, Math.max(110, 1400 / Math.max(changes.length, 1)))
+    let k = 0
+    // a slow preview already gave the student a look at the plan as it is
+    const wait = Math.max(0, START_MS - (performance.now() - opened))
+    let timer = window.setTimeout(function land() {
+      k += 1
+      setStep(k)
+      if (k >= changes.length) setDone(true)
+      else timer = window.setTimeout(land, every)
+    }, wait)
+    return () => clearTimeout(timer)
+  }, [playing, changes.length, id, opened])
+  const frame = useMemo(
+    () => (preview ? revealFrame(current, preview, changes, playing ? step : changes.length) : null),
+    [current, preview, changes, playing, step],
+  )
 
   // an outdated or already-handled proposal can't be previewed; say so instead of loading forever
   const failed = proposalError ?? (proposal?.status === 'applied' ? null : previewError)
@@ -36,16 +72,9 @@ export default function ProposalView({ id, current }: { id: number; current: Pla
     )
   }
   const applied = proposal?.status === 'applied'
-  if (!proposal || (!preview && !applied)) return <div className="p-6 text-muted">Loading proposal…</div>
+  if (!proposal) return <div className="p-6 text-muted">Loading proposal…</div>
 
-  const before = new Map(current.plan.placements.map((p) => [p.id, p]))
-  const moved = new Set(
-    (preview?.plan.placements ?? [])
-      .filter((p) => before.get(p.id)?.term !== p.term)
-      .map((p) => p.id),
-  )
-  const ghosts = current.plan.placements.filter((p) => moved.has(p.id))
-  const shown = applied || !preview ? current : showAfter ? preview : current
+  const shown = applied || !frame ? current : showAfter ? frame.state : current
   const blocking = proposal.violations.filter((v) => v.blocking)
 
   return (
@@ -65,6 +94,11 @@ export default function ProposalView({ id, current }: { id: number; current: Pla
           ) : proposal.status !== 'pending' ? (
             <div className="flex items-center gap-2">
               <span className="text-muted">This proposal is {proposal.status}.</span>
+              {proposal.status === 'discarded' && proposal.base_version === current.plan.version && (
+                <Button disabled={restore.isPending} onClick={() => restore.mutate(id)}>
+                  Restore
+                </Button>
+              )}
               <Button onClick={close}>Back to plan</Button>
             </div>
           ) : (
@@ -75,14 +109,31 @@ export default function ProposalView({ id, current }: { id: number; current: Pla
                     key={label}
                     type="button"
                     aria-pressed={showAfter === (label === 'After')}
-                    onClick={() => setShowAfter(label === 'After')}
+                    onClick={() => {
+                      setShowAfter(label === 'After')
+                      setDone(true)
+                    }}
                     className={`h-8 rounded border-0 px-3 ${showAfter === (label === 'After') ? 'bg-ink text-paper' : 'bg-transparent'}`}
                   >
                     {label}
                   </button>
                 ))}
               </div>
-              <Button onClick={() => discard.mutate(id, { onSuccess: close })}>Discard</Button>
+              <Button
+                onClick={() =>
+                  discard.mutate(id, {
+                    // back to the chat, where the card asks what was off
+                    onSuccess: () => {
+                      close()
+                      const advisor = useAdvisor.getState()
+                      if (window.matchMedia(WIDE_QUERY).matches) advisor.reveal()
+                      else advisor.setSheetOpen(true)
+                    },
+                  })
+                }
+              >
+                Discard
+              </Button>
               <Button
                 variant="primary"
                 disabled={blocking.length > 0 || apply.isPending}
@@ -93,12 +144,15 @@ export default function ProposalView({ id, current }: { id: number; current: Pla
             </div>
           )}
         </div>
-        {apply.error && <p className="m-0 px-4 pt-3 text-[13px] text-accent">{apply.error.message}</p>}
+        {(apply.error ?? restore.error) && (
+          <p className="m-0 px-4 pt-3 text-[13px] text-accent">{(apply.error ?? restore.error)!.message}</p>
+        )}
         <DegreeGraph
           state={shown}
           readOnly
-          moved={applied ? undefined : showAfter ? moved : new Set()}
-          ghosts={!applied && showAfter ? ghosts : []}
+          moved={applied || !frame ? undefined : showAfter ? frame.moved : new Set()}
+          ghosts={!applied && showAfter && frame ? frame.ghosts : []}
+          incremental={!applied && showAfter}
         />
       </section>
 

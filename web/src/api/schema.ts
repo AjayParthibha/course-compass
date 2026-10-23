@@ -215,6 +215,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/proposals/{proposal_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Proposal
+         * @description Take back a discard, as long as the plan hasn't changed since the proposal was made.
+         */
+        post: operations["restore_proposal_api_proposals__proposal_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/profile": {
         parameters: {
             query?: never;
@@ -609,7 +629,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** AddOp */
+        /**
+         * AddOp
+         * @description Add a course, or an open requirement slot (`slot`, a requirement id), to a term. Give
+         *     one, not both: to put a course in an open slot already in the plan, replace that slot.
+         */
         "AddOp-Input": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -623,7 +647,11 @@ export interface components {
             /** Slot */
             slot?: string | null;
         };
-        /** AddOp */
+        /**
+         * AddOp
+         * @description Add a course, or an open requirement slot (`slot`, a requirement id), to a term. Give
+         *     one, not both: to put a course in an open slot already in the plan, replace that slot.
+         */
         "AddOp-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1327,7 +1355,7 @@ export interface components {
              * @default pending
              * @enum {string}
              */
-            status: "pending" | "applied" | "discarded" | "outdated";
+            status: "pending" | "applied" | "discarded" | "withdrawn" | "outdated";
             /**
              * Created At
              * Format: date-time
@@ -1581,7 +1609,10 @@ export interface components {
              */
             blocking: number;
         };
-        /** ReplaceOp */
+        /**
+         * ReplaceOp
+         * @description Put a different course in a placement. On an open slot, this fills the slot.
+         */
         "ReplaceOp-Input": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1593,7 +1624,10 @@ export interface components {
             /** Course */
             course: string;
         };
-        /** ReplaceOp */
+        /**
+         * ReplaceOp
+         * @description Put a different course in a placement. On an open slot, this fills the slot.
+         */
         "ReplaceOp-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -2242,6 +2276,39 @@ export interface operations {
         };
     };
     discard_proposal_api_proposals__proposal_id__discard_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                proposal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_proposal_api_proposals__proposal_id__restore_post: {
         parameters: {
             query?: never;
             header?: {

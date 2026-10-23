@@ -10,7 +10,7 @@ export const keys = {
   profile: ['profile'] as const,
   course: (code: string) => ['course', code] as const,
   proposal: (id: number) => ['proposal', id] as const,
-  proposalPreview: (id: number) => ['proposal', id, 'preview'] as const,
+  proposalPreview: (id: number, planVersion: number) => ['proposal', id, 'preview', planVersion] as const,
   candidates: (slot: string, term: string, limit: number, subject?: string | null) =>
     ['candidates', slot, term, limit, subject ?? null] as const,
   // under 'candidates' so whatever refreshes the lists refreshes the areas too
@@ -117,17 +117,19 @@ export function useProposal(id: number | null) {
   })
 }
 
-export function useProposalPreview(id: number | null) {
-  return useQuery({
-    queryKey: keys.proposalPreview(id ?? 0),
-    queryFn: () =>
-      unwrap(
-        api.POST('/api/proposals/{proposal_id}/preview', {
-          params: { path: { proposal_id: id! } },
-        }),
-      ),
-    enabled: id != null,
-  })
+/**
+ * The plan as it would be with a proposal applied (nothing is saved). It only changes with the
+ * plan, so it is kept per plan version and never refetched.
+ */
+export const proposalPreviewQuery = (id: number, planVersion: number) => ({
+  queryKey: keys.proposalPreview(id, planVersion),
+  queryFn: () =>
+    unwrap(api.POST('/api/proposals/{proposal_id}/preview', { params: { path: { proposal_id: id } } })),
+  staleTime: Infinity,
+})
+
+export function useProposalPreview(id: number | null, planVersion: number) {
+  return useQuery({ ...proposalPreviewQuery(id ?? 0, planVersion), enabled: id != null })
 }
 
 export function useApplyProposal() {
@@ -148,6 +150,18 @@ export function useDiscardProposal() {
     mutationFn: (id: number) =>
       unwrap(
         api.POST('/api/proposals/{proposal_id}/discard', { params: { path: { proposal_id: id } } }),
+      ),
+    onSuccess: (proposal) => qc.setQueryData(keys.proposal(proposal.id), proposal),
+  })
+}
+
+/** Take back a discard; fails once the plan has changed since the proposal was made. */
+export function useRestoreProposal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrap(
+        api.POST('/api/proposals/{proposal_id}/restore', { params: { path: { proposal_id: id } } }),
       ),
     onSuccess: (proposal) => qc.setQueryData(keys.proposal(proposal.id), proposal),
   })

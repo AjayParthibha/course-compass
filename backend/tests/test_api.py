@@ -2,7 +2,6 @@ import json
 
 import pytest
 
-from app.planner.ops import OpError
 from app.schemas.courses import Course
 
 HISTORY = """FA24 CS 1110 / MATH 1910
@@ -147,6 +146,43 @@ def test_chat_history_shows_current_proposal_status(client, auth):
     assert history["messages"][-1]["events"][0]["proposal"]["status"] == "discarded"
     res = client.post(f"/api/proposals/{proposal_id}/apply", headers=auth)
     assert res.status_code == 409
+
+
+def test_restore_takes_back_a_discard_until_the_plan_changes(client, auth):
+    onboard(client, auth)
+    proposal_id = propose(auth, "Add CS 3110", [{"op": "add", "term": "FA26", "course": "CS 3110"}])
+    client.post(f"/api/proposals/{proposal_id}/discard", headers=auth)
+    res = client.post(f"/api/proposals/{proposal_id}/restore", headers=auth)
+    assert res.json()["status"] == "pending"
+
+    client.post(f"/api/proposals/{proposal_id}/discard", headers=auth)
+    edit = {"ops": [{"op": "add", "term": "SP27", "course": "CS 3110"}]}
+    client.post("/api/plan/ops", json=edit, headers=auth)
+    res = client.post(f"/api/proposals/{proposal_id}/restore", headers=auth)
+    assert res.status_code == 409
+    assert client.get(f"/api/proposals/{proposal_id}", headers=auth).json()["status"] == "discarded"
+
+
+def test_advisor_context_says_which_suggestions_were_discarded(client, auth):
+    from sqlalchemy import select
+
+    from app import models
+    from app.advisor.prompts import context_block
+    from app.models import SessionLocal
+
+    onboard(client, auth)
+    proposal_id = propose(
+        auth, "Add CS 3110 in Fall ’26", [{"op": "add", "term": "FA26", "course": "CS 3110"}]
+    )
+    client.post(f"/api/proposals/{proposal_id}/discard", headers=auth)
+    token = auth["Authorization"].split()[1]
+    with SessionLocal() as db:
+        student = db.query(models.Student).filter_by(token=token).one()
+        convo = db.scalars(
+            select(models.Conversation).where(models.Conversation.student_id == student.id)
+        ).one()
+        text = context_block(db, student, convo.id)
+    assert "- Add CS 3110 in Fall ’26: discarded by the student" in text
 
 
 def test_profile_facts(client, auth):
@@ -394,8 +430,20 @@ def test_advisor_cannot_lock_or_touch_locked(client, auth):
         propose(auth, "Unlock", [{"op": "lock", "placement_id": slot["id"], "locked": False}])
 
     ops(client, auth, {"op": "lock", "placement_id": slot["id"]})
-    with pytest.raises(OpError, match="locked in Spring ’27 by the student"):
-        propose(auth, "Drop it", [{"op": "remove", "placement_id": slot["id"]}])
+    from app import models
+    from app.advisor.tools import ToolContext, call_tool
+    from app.models import SessionLocal
+
+    token = auth["Authorization"].split()[1]
+    with SessionLocal() as db:
+        student = db.query(models.Student).filter_by(token=token).one()
+        drop = {"op": "remove", "placement_id": slot["id"]}
+        res = call_tool(
+            ToolContext(db=db, student=student),
+            "propose_changes",
+            {"summary": "Drop it", "ops": [drop], "changes": []},
+        )
+    assert "locked in Spring ’27 by the student" in res.data["error"]
 
 
 def test_not_interested_covers_cross_listings(client, auth, catalog, monkeypatch):
@@ -571,7 +619,15 @@ def test_repair_tool_reports_back(client, auth):
         ok = call_tool(ctx, "repair_plan", {"summary": "Check", "request": {}})
         assert ok.data["withdrew_earlier_drafts"] == [draft.data["id"]]
         row = services.get_proposal(db, student, draft.data["id"])
-        assert row.status == "discarded"
+        assert row.status == "withdrawn"
+
+        # an edit the plan can't take comes back with the reason, not a bare tool error
+        ctx.events.clear()
+        both = {"op": "add", "term": future[0], "course": "CS 4780", "slot": "ext"}
+        bad = call_tool(ctx, "propose_changes", {"summary": "x", "ops": [both], "changes": []})
+        assert bad.summary.startswith("edit rejected")
+        assert "replace that slot" in bad.data["error"]
+        assert ctx.events == []
 
 
 def test_advisor_approval_relaxes_the_one_subject_rule(client, auth):

@@ -332,6 +332,28 @@ def get_proposal(db: Session, st: models.Student, proposal_id: int) -> models.Pr
     return row
 
 
+def conversation_proposals(
+    db: Session, st: models.Student, convo: models.Conversation
+) -> dict[int, s.Proposal]:
+    """Proposals made in a conversation as they stand now, oldest first; chat events keep
+    the snapshot from when each was made."""
+    ids = [
+        e["proposal"]["id"]
+        for m in convo.messages
+        for e in m.events or []
+        if e.get("type") == "proposal"
+    ]
+    if not ids or not st.plans:
+        return {}
+    plan = get_plan(db, st)
+    rows = db.scalars(
+        select(models.Proposal)
+        .where(models.Proposal.id.in_(ids), models.Proposal.plan_id == plan.id)
+        .order_by(models.Proposal.id)
+    )
+    return {r.id: proposal_schema(r, plan.version) for r in rows}
+
+
 def apply_proposal(db: Session, st: models.Student, row: models.Proposal) -> s.PlanState:
     plan = get_plan(db, st)
     status = proposal_status(row, plan.version)

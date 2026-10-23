@@ -50,6 +50,11 @@ type Props = {
   highlight?: Set<string> | null
   moved?: Set<string>
   ghosts?: Placement[]
+  /**
+   * `moved` grows a step at a time (a proposal landing): everything else stays dim from the start,
+   * each change pops in as it lands, and only its own lines draw in.
+   */
+  incremental?: boolean
   readOnly?: boolean
   onSelect?: (id: string | null) => void
   onMove?: (placement: Placement, term: string) => void
@@ -61,6 +66,7 @@ export default function DegreeGraph({
   highlight = null,
   moved,
   ghosts = NO_GHOSTS,
+  incremental = false,
   readOnly,
   onSelect,
   onMove,
@@ -108,7 +114,8 @@ export default function DegreeGraph({
     return null
   }, [focus, movedSet, edges])
   const steps = useMemo(() => (chainId && !highlightSet ? chainSteps(chainId, edges) : null), [chainId, highlightSet, edges])
-  const litKey = highlightKey != null ? `h:${highlightKey}` : chainId ? `c:${chainId}` : movedKey ? `m:${movedKey}` : null
+  const litKey =
+    highlightKey != null ? `h:${highlightKey}` : chainId ? `c:${chainId}` : movedKey ? `m:${incremental ? '' : movedKey}` : null
 
   const currentIndex = plan.terms.indexOf(plan.current_term)
   const columns = useMemo(
@@ -255,6 +262,34 @@ export default function DegreeGraph({
     }
     measure()
   }, [layoutKey, takeDrop, follow, measure])
+
+  // A change landing in place (a slot filled) pops; one that moved or is new already glides or fades
+  // in. Either way, bring it into view sideways.
+  const landed = useRef(movedSet)
+  useEffect(() => {
+    const prev = landed.current
+    landed.current = movedSet
+    const sc = scroller.current
+    if (!incremental || !sc) return
+    let scrolled = false
+    for (const id of movedSet) {
+      if (prev.has(id)) continue
+      const el = content.current?.querySelector<HTMLElement>(`[data-card="${CSS.escape(id)}"]`)
+      if (!el) continue
+      if (!scrolled) {
+        scrolled = true
+        const s = sc.getBoundingClientRect()
+        const r = el.getBoundingClientRect()
+        if (r.left < s.left + 8) sc.scrollBy({ left: r.left - s.left - PEEK, behavior: scrollBehavior() })
+        else if (r.right > s.right - 8) sc.scrollBy({ left: r.right - s.right + PEEK, behavior: scrollBehavior() })
+      }
+      if (reducedMotion() || el.getAnimations().some((a) => a.id === 'flip')) continue
+      el.animate([{ transform: 'scale(.92)' }, { transform: 'scale(1.04)', offset: 0.6 }, { transform: 'none' }], {
+        duration: 320,
+        easing: 'ease-out',
+      })
+    }
+  }, [movedSet, incremental])
 
   // ---- scrolling ----
   const placedAtStart = useRef(false)
@@ -463,9 +498,10 @@ export default function DegreeGraph({
                     {termLabel(col.term)}
                   </span>
                   <span
+                    key={incremental ? col.credits : undefined}
                     aria-hidden="true"
                     title={over ? `Over your ${col.cap}-credit limit for ${termLabel(col.term)}` : undefined}
-                    className={`font-mono text-[11px] font-normal whitespace-nowrap ${
+                    className={`font-mono text-[11px] font-normal whitespace-nowrap ${incremental ? 'animate-credit-tick motion-reduce:animate-none' : ''} ${
                       hoveredCol && blocked ? 'text-accent' : over || projectedOver ? 'text-accent' : 'text-muted'
                     }`}
                   >
@@ -489,7 +525,7 @@ export default function DegreeGraph({
                           interactive={interactive}
                           tabStop={p.id === tabStop}
                           selected={p.id === active}
-                          dim={(focus != null && !focus.has(p.id)) || (movedSet.size > 0 && !movedSet.has(p.id))}
+                          dim={(focus != null && !focus.has(p.id)) || ((movedSet.size > 0 || incremental) && !movedSet.has(p.id))}
                           moved={movedSet.has(p.id)}
                           problem={problems.has(p.id)}
                           draggable={!readOnly && !!onMove && p.status === 'planned' && !p.locked}

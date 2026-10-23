@@ -24,6 +24,7 @@
   --animate-card-settle: card-settle 160ms ease-out both;
   --animate-drawer-in: drawer-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-sheet-fade: sheet-fade 160ms ease-out both;
+  --animate-credit-tick: credit-tick 240ms ease-out both;
 
   @keyframes drawer-in {
     from {
@@ -33,6 +34,13 @@
   @keyframes sheet-fade {
     from {
       opacity: 0;
+    }
+  }
+
+  @keyframes credit-tick {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
     }
   }
 

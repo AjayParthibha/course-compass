@@ -40,6 +40,9 @@ class Plan(Schema):
 
 
 class AddOp(Schema):
+    """Add a course, or an open requirement slot (`slot`, a requirement id), to a term. Give
+    one, not both: to put a course in an open slot already in the plan, replace that slot."""
+
     op: Literal["add"] = "add"
     term: str
     course: str | None = None
@@ -61,6 +64,8 @@ class MoveOp(Schema):
 
 
 class ReplaceOp(Schema):
+    """Put a different course in a placement. On an open slot, this fills the slot."""
+
     op: Literal["replace"] = "replace"
     placement_id: str
     course: str
@@ -150,8 +155,9 @@ class RejectedOption(Schema):
 
 
 # "outdated": still pending, but the plan has changed since it was made (version != base_version),
-# so it can't be applied as-is
-ProposalStatus = Literal["pending", "applied", "discarded", "outdated"]
+# so it can't be applied as-is. "discarded": the student turned it down; "withdrawn": the advisor
+# dropped its own draft after the planner flagged it
+ProposalStatus = Literal["pending", "applied", "discarded", "withdrawn", "outdated"]
 
 
 class SolverSummary(Schema):

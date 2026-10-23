@@ -130,3 +130,18 @@ def discard_proposal(proposal_id: int, db: DB, student: CurrentStudent) -> Propo
         row.status = "discarded"
         db.commit()
     return services.proposal_schema(row, services.get_plan(db, student).version)
+
+
+@router.post("/proposals/{proposal_id}/restore")
+def restore_proposal(proposal_id: int, db: DB, student: CurrentStudent) -> Proposal:
+    """Take back a discard, as long as the plan hasn't changed since the proposal was made."""
+    row = services.get_proposal(db, student, proposal_id)
+    if row is None:
+        raise HTTPException(404, "no such proposal")
+    version = services.get_plan(db, student).version
+    if row.status == "discarded":
+        if row.base_version != version:
+            raise HTTPException(409, services.OUTDATED)
+        row.status = "pending"
+        db.commit()
+    return services.proposal_schema(row, version)
