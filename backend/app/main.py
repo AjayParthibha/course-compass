@@ -1,13 +1,26 @@
+import threading
+from contextlib import asynccontextmanager
+
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.catalog.store import get_catalog
 from app.config import get_settings
 from app.routes import auth, chat, explore, onboarding, plans, profile
 
 settings = get_settings()
-app = FastAPI(title="CourseCompass")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # load the catalog now rather than on the first request that needs it (about a second)
+    threading.Thread(target=get_catalog, daemon=True).start()
+    yield
+
+
+app = FastAPI(title="CourseCompass", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
